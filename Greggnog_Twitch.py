@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 # =====================================================
 # 🪄 GREGGNOG PERSONALITY PROMPT AREA
 # =====================================================
-# Edit this to train Greggnog’s tone and humor.
+# Edit this to define Greggnog’s tone and humor.
 # =====================================================
 
 GREGGNOG_PERSONALITY = """
@@ -76,13 +76,15 @@ if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
 
 # =====================================================
-# CONNECT TO TWITCH
+# CONNECT TO TWITCH (modern SSL)
 # =====================================================
 
 server = "irc.chat.twitch.tv"
 port = 6697
-irc = ssl.wrap_socket(socket.socket())
-irc.connect((server, port))
+
+context = ssl.create_default_context()
+raw_sock = socket.create_connection((server, port))
+irc = context.wrap_socket(raw_sock, server_hostname=server)
 
 irc.send(f"PASS {TOKEN}\r\n".encode("utf-8"))
 irc.send(f"NICK {BOT_NICK}\r\n".encode("utf-8"))
@@ -133,7 +135,6 @@ def generate_satchfact():
             temperature=1.1
         )
         fact = response.choices[0].message.content.strip()
-        # Ensure it starts with "Satch" for style consistency
         if not fact.lower().startswith("satch"):
             fact = "Satch " + fact[0].lower() + fact[1:]
         return fact
@@ -152,7 +153,6 @@ def listen():
             data = irc.recv(2048).decode("utf-8", errors="ignore")
             buffer += data
 
-            # Respond to Twitch pings
             if data.startswith("PING"):
                 irc.send("PONG :tmi.twitch.tv\r\n".encode("utf-8"))
                 continue
@@ -166,9 +166,9 @@ def listen():
 
                 username = parts[0].split("!")[0][1:]
                 message = parts[3][1:]
+                lower_msg = message.lower()
 
                 print(f"[{username}] {message}")
-                lower_msg = message.lower()
 
                 # ------------- COMMANDS ------------- #
                 if lower_msg.startswith("!satchfact"):
