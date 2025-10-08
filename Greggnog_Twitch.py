@@ -2,6 +2,12 @@ import os
 import socket
 import ssl
 import time
+import re
+from datetime import datetime
+try:
+    from zoneinfo import ZoneInfo  # Python 3.9+
+except Exception:
+    ZoneInfo = None
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -33,8 +39,6 @@ Keep responses under 200 characters and make them creative.
 # =====================================================
 # 🧃 SATCH FACT PROMPT AREA
 # =====================================================
-# You can edit this to change how she invents Satch Facts.
-# =====================================================
 
 SATCHFACT_PROMPT = """
 You are Greggnog, a chaotic gremlin of Twitch. 
@@ -60,6 +64,16 @@ Now invent a new Satch Fact:
 """
 
 # =====================================================
+# 🕰️ TIME-OF-DAY PROMPTS FOR !current (edit these)
+# =====================================================
+TIME_BLOCK_PROMPTS = {
+    "morning":   "It's morning. Give a playful coffee-gremlin check-in to chat.",
+    "afternoon": "It's afternoon. Toss a breezy, mid-day quip that invites small talk.",
+    "evening":   "It's evening. Cozy gamer-night vibe; tease raids & loot.",
+    "late":      "It's late night. Sleepy chaos gremlin energy; keep it short and weird."
+}
+
+# =====================================================
 # CONFIGURATION
 # =====================================================
 
@@ -69,6 +83,8 @@ BOT_NICK = "GreggnogBot"
 CHANNEL = os.getenv("TWITCH_CHANNEL")
 TOKEN = os.getenv("TWITCH_OAUTH_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+LOCAL_TZ = os.getenv("LOCAL_TZ", None)
+TZINFO = ZoneInfo(LOCAL_TZ) if (LOCAL_TZ and ZoneInfo) else None
 
 if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
     raise ValueError("Missing environment variable: TWITCH_OAUTH_TOKEN, TWITCH_CHANNEL, or OPENAI_API_KEY.")
@@ -85,6 +101,7 @@ port = 6697
 context = ssl.create_default_context()
 raw_sock = socket.create_connection((server, port))
 irc = context.wrap_socket(raw_sock, server_hostname=server)
+irc.settimeout(0.5)  # prevent freezing, lets timers tick
 
 irc.send(f"PASS {TOKEN}\r\n".encode("utf-8"))
 irc.send(f"NICK {BOT_NICK}\r\n".encode("utf-8"))
@@ -123,6 +140,7 @@ def generate_reply(prompt):
         print("OpenAI error:", e)
         return None
 
+
 def generate_satchfact():
     """Generate a brand new random Satch Fact."""
     try:
@@ -143,6 +161,121 @@ def generate_satchfact():
         return "Satch once tried to debug a sandwich."
 
 # =====================================================
+# TIMER + TIME-OF-DAY HELPERS
+# =====================================================
+
+def now_local():
+    return datetime.now(TZINFO) if TZINFO else datetime.now()
+
+def get_time_block():
+    h = now_local().hour
+    if 5 <= h < 12:
+        return "morning"
+    elif 12 <= h < 17:
+        return "afternoon"
+    elif 17 <= h < 23:
+        return "evening"
+    else:
+        return "late"
+
+def generate_current_response(user):
+    """AI reply for !current based on time block and TIME_BLOCK_PROMPTS."""
+    block = get_time_block()
+    prompt = TIME_BLOCK_PROMPTS.get(block, "Say hi in a time-agnostic way.")
+    try:
+        resp = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": GREGGNOG_PERSONALITY},
+                {"role": "user", "content": f"{prompt} Address @{user} and the channel."}
+            ],
+            max_tokens=120,
+            temperature=0.9
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        print("!current error:", e)
+        return f"It's {block}. Hi @{user}."
+
+# ---- Timers ----
+
+timers = {}
+
+def _timer_key(user, name):
+    return f"{user.lower()}:{name.lower()[:40]}"
+
+def parse_duration(text):
+    if not text:
+        return 0
+    s = text.strip().lower()
+
+    if ":" in s:
+        parts = s.split(":")
+        try:
+            if len(parts) == 3:
+                h, m, sec = map(int, parts)
+                return h * 3600 + m * 60 + sec
+            elif len(parts) == 2:
+                m, sec = map(int, parts)
+                return m * 60 + sec
+        except ValueError:
+            return 0
+        return 0
+
+    total = 0
+    for amt, unit in re.findall(r'(\d+)\s*([hms])', s):
+        v = int(amt)
+        if unit == 'h':
+            total += v * 3600
+        elif unit == 'm':
+            total += v * 60
+        else:
+            total += v
+    if total == 0 and s.isdigit():
+        total = int(s)
+    return total
+
+def format_duration(seconds):
+    seconds = max(0, int(seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h{m}m{s}s"
+    if m:
+        return f"{m}m{s}s"
+    return f"{s}s"
+
+def start_timer(user, duration_s, name):
+    key = _timer_key(user, name)
+    end = time.time() + duration_s
+    timers[key] = {"user": user, "name": name, "end": end}
+    return key, end
+
+def time_left(user, name):
+    key = _timer_key(user, name)
+    t = timers.get(key)
+    if not t:
+        return None
+    return t["end"] - time.time()
+
+def list_user_timers(user):
+    out = []
+    now_ts = time.time()
+    for t in timers.values():
+        if t["user"].lower() == user.lower():
+            out.append((t["name"], max(0, t["end"] - now_ts)))
+    out.sort(key=lambda x: x[1])
+    return out
+
+def check_timers():
+    now_ts = time.time()
+    expired = [k for k, t in timers.items() if t["end"] <= now_ts]
+    for k in expired:
+        t = timers.pop(k, None)
+        if t:
+            send_message(f"⏰ @{t['user']} '{t['name']}' is done!")
+
+# =====================================================
 # MAIN LISTEN LOOP
 # =====================================================
 
@@ -150,27 +283,83 @@ def listen():
     buffer = ""
     while True:
         try:
-            data = irc.recv(2048).decode("utf-8", errors="ignore")
-            buffer += data
+            try:
+                data = irc.recv(2048).decode("utf-8", errors="ignore")
+            except socket.timeout:
+                data = ""
 
-            if data.startswith("PING"):
-                irc.send("PONG :tmi.twitch.tv\r\n".encode("utf-8"))
-                continue
+            buffer += data
 
             while "\r\n" in buffer:
                 line, buffer = buffer.split("\r\n", 1)
-                parts = line.split(" ", 3)
 
+                if line.startswith("PING"):
+                    irc.send("PONG :tmi.twitch.tv\r\n".encode("utf-8"))
+                    continue
+
+                parts = line.split(" ", 3)
                 if len(parts) < 4 or not parts[3].startswith(":"):
                     continue
 
                 username = parts[0].split("!")[0][1:]
                 message = parts[3][1:]
-                lower_msg = message.lower()
-
+                lower_msg = message.lower().strip()
                 print(f"[{username}] {message}")
 
                 # ------------- COMMANDS ------------- #
+
+                if lower_msg.startswith("!timer"):
+                    tokens = message.split(" ", 2)
+                    if len(tokens) < 2:
+                        send_message("Usage: !timer <dur> [name] e.g., !timer 5m tea")
+                        continue
+                    dur_s = parse_duration(tokens[1])
+                    if dur_s <= 0:
+                        send_message("Bad duration. Try 10s, 5m, 1h30m, or 1:30:00")
+                        continue
+                    name = tokens[2].strip() if len(tokens) >= 3 else f"{username}-timer"
+                    if len(name) > 40:
+                        name = name[:40]
+                    _, end_ts = start_timer(username, dur_s, name)
+                    send_message(f"⏱️ @{username} set '{name}' for {format_duration(dur_s)}.")
+                    continue
+
+                if lower_msg.startswith("!timeleft"):
+                    parts2 = message.split(" ", 1)
+                    if len(parts2) == 2 and parts2[1].strip():
+                        name = parts2[1].strip()
+                        remaining = time_left(username, name)
+                        if remaining is None:
+                            send_message(f"@{username} no timer named '{name}'.")
+                        else:
+                            send_message(f"@{username} {name}: {format_duration(remaining)} left.")
+                    else:
+                        items = list_user_timers(username)
+                        if not items:
+                            send_message(f"@{username} no active timers.")
+                        else:
+                            summary = ", ".join([f"{n}:{format_duration(t)}" for n, t in items[:3]])
+                            send_message(f"@{username} {summary}")
+                    continue
+
+                if lower_msg == "!timers":
+                    now_ts = time.time()
+                    active = [(t["user"], t["name"], max(0, t["end"] - now_ts)) for t in timers.values()]
+                    if not active:
+                        send_message("No active timers.")
+                    else:
+                        active.sort(key=lambda x: x[2])
+                        lines = [f"@{u}:{n} {format_duration(s)}" for u, n, s in active[:4]]
+                        send_message(" | ".join(lines))
+                    continue
+
+                if lower_msg.startswith("!current"):
+                    reply = generate_current_response(username)
+                    if reply:
+                        send_message(f"@{username} {reply}")
+                    continue
+
+                # existing !satchfact command
                 if lower_msg.startswith("!satchfact"):
                     fact = generate_satchfact()
                     send_message(f"@{username} {fact}")
@@ -183,9 +372,11 @@ def listen():
                     if reply:
                         send_message(f"@{username} {reply}")
 
+            check_timers()
+
         except Exception as e:
             print("Error in main loop:", e)
-            time.sleep(5)
+            time.sleep(1)
 
 # =====================================================
 # RUN
