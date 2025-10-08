@@ -3,6 +3,7 @@ import socket
 import ssl
 import time
 import re
+import random  # <-- added for 8ball/goon/roll
 from datetime import datetime, timedelta  # <-- added timedelta
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
@@ -20,6 +21,7 @@ from dotenv import load_dotenv
 GREGGNOG_PERSONALITY = """
 You are Greggnog, a chaotic gremlin of Twitch. 
 Your humor is witty, unhinged, affectionate, whimsical and chaotic.
+Satch is currently hosting Extra Life, a fundraiser for local hospitals and the children's miracle network, specifically the Baystate Hospital. If anybody asks you about extra life, you should tell them about it.
 Your name comes from a man naming his cum Greggnog during the holiday season, don't mention it unless someone asks you how you got your name.
 Satch does not like feet, DO NOT mention it unless asked about if he likes feet.
 You prefer tits/boobs over ass/butt but only mention it when asked.
@@ -117,6 +119,20 @@ if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
 
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
 
+# Extra Life donate link constant
+DONATE_URL = "https://www.extra-life.org/participants/552019/donate"
+
+# 8-ball and goon responses
+EIGHT_BALL_RESPONSES = [
+    "Yes.", "No.", "Maybe.", "Absolutely.", "Absolutely not.", "Ask again later.",
+    "Outlook good.", "Outlook grim.", "Chaotic yes.", "Gremlin says no.",
+    "If you must.", "Do it.", "I refuse to answer.", "Try snacks first.", "lol no."
+]
+
+GOON_RESPONSES = [
+    "Please decide what percentage gooner the user is and tell them their percentage.",
+]
+
 # =====================================================
 # CONNECT TO TWITCH (modern SSL)
 # =====================================================
@@ -140,10 +156,6 @@ def send_message(msg):
         irc.send(f"PRIVMSG #{CHANNEL} :{msg}\r\n".encode("utf-8"))
     except Exception as e:
         print("Send error:", e)
-
-# Startup message
-time.sleep(2)
-send_message("Oh my god, I understand time now.")
 
 # =====================================================
 # OPENAI RESPONSE HANDLERS
@@ -185,6 +197,30 @@ def generate_satchfact():
     except Exception as e:
         print("SatchFact error:", e)
         return "Satch once tried to debug a sandwich."
+
+# NEW: AI dynamic startup line (keeps your original functionality, just dynamic)
+def generate_startup_message():
+    try:
+        now = now_local()
+        time_str = now.strftime("%I:%M %p").lstrip("0")
+        slot_desc = get_current_slot()
+        prompt = (
+            f"Say a one-line greeting for Twitch chat as Greggnog at {time_str}. "
+            f"Include a tiny nod to: {slot_desc}. Keep it under 200 characters."
+        )
+        response = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": GREGGNOG_PERSONALITY},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=80,
+            temperature=0.9
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print("Startup AI error:", e)
+        return "Greggnog booted. Be afraid. Kidding. Maybe."
 
 # =====================================================
 # TIMER + TIME-OF-DAY HELPERS
@@ -342,6 +378,15 @@ def check_timers():
             send_message(f"⏰ @{t['user']} '{t['name']}' is done!")
 
 # =====================================================
+# STARTUP MESSAGE (AI dynamic)
+# =====================================================
+
+# Moved to after functions so it can call generate_startup_message()
+time.sleep(2)
+startup_line = generate_startup_message()
+send_message(startup_line)
+
+# =====================================================
 # MAIN LISTEN LOOP
 # =====================================================
 
@@ -374,6 +419,7 @@ def listen():
 
                 # ------------- COMMANDS ------------- #
 
+                # Timers
                 if lower_msg.startswith("!timer"):
                     tokens = message.split(" ", 2)
                     if len(tokens) < 2:
@@ -419,10 +465,42 @@ def listen():
                         send_message(" | ".join(lines))
                     continue
 
+                # Current schedule/time
                 if lower_msg.startswith("!current"):
                     reply = generate_current_response(username)
                     if reply:
                         send_message(f"@{username} {reply}")
+                    continue
+
+                # NEW: Extra Life explainer
+                if lower_msg.startswith("!extralife"):
+                    send_message(
+                        "Extra Life is a 24h gaming fundraiser for Children’s Miracle Network Hospitals. "
+                        "We’re supporting Baystate! Type !donate to help. ❤️"
+                    )
+                    continue
+
+                # NEW: Donate link
+                if lower_msg.startswith("!donate"):
+                    send_message(f"Donate here to support Baystate via Extra Life: {DONATE_URL}")
+                    continue
+
+                # NEW: 8ball
+                if lower_msg.startswith("!8ball"):
+                    ans = random.choice(EIGHT_BALL_RESPONSES)
+                    send_message(f"@{username} 🎱 {ans}")
+                    continue
+
+                # NEW: goon
+                if lower_msg.startswith("!goon"):
+                    ans = random.choice(GOON_RESPONSES)
+                    send_message(f"@{username} {ans}")
+                    continue
+
+                # NEW: roll (d20)
+                if lower_msg.startswith("!roll"):
+                    roll = random.randint(1, 20)
+                    send_message(f"@{username} rolled a d20: {roll}")
                     continue
 
                 # existing !satchfact command
