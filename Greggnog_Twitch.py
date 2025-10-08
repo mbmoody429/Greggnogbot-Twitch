@@ -3,7 +3,7 @@ import socket
 import ssl
 import time
 import re
-import random  # <-- added for 8ball/goon/roll
+import random  # <-- used for !roll and seeded % for !goon
 from datetime import datetime, timedelta  # <-- added timedelta
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
@@ -122,15 +122,19 @@ client_ai = OpenAI(api_key=OPENAI_API_KEY)
 # Extra Life donate link constant
 DONATE_URL = "https://www.extra-life.org/participants/552019/donate"
 
-# 8-ball and goon responses
+# (Kept for compatibility; now AI-driven but we keep these arrays as requested)
 EIGHT_BALL_RESPONSES = [
     "Yes.", "No.", "Maybe.", "Absolutely.", "Absolutely not.", "Ask again later.",
     "Outlook good.", "Outlook grim.", "Chaotic yes.", "Gremlin says no.",
     "If you must.", "Do it.", "I refuse to answer.", "Try snacks first.", "lol no."
 ]
-
 GOON_RESPONSES = [
-    "Please decide what percentage gooner the user is and tell them their percentage.",
+    "goon goon goon (bongo noises)",
+    "Certified goon moment.",
+    "Deploying maximum goon energy.",
+    "Goon detected. Containing… unsuccessfully.",
+    "Goon status: terminal.",
+    "The goon inside me honors the goon inside you."
 ]
 
 # =====================================================
@@ -178,7 +182,6 @@ def generate_reply(prompt):
         print("OpenAI error:", e)
         return None
 
-
 def generate_satchfact():
     """Generate a brand new random Satch Fact."""
     try:
@@ -198,7 +201,7 @@ def generate_satchfact():
         print("SatchFact error:", e)
         return "Satch once tried to debug a sandwich."
 
-# NEW: AI dynamic startup line (keeps your original functionality, just dynamic)
+# NEW: AI dynamic startup line (kept)
 def generate_startup_message():
     try:
         now = now_local()
@@ -222,6 +225,93 @@ def generate_startup_message():
         print("Startup AI error:", e)
         return "Greggnog booted. Be afraid. Kidding. Maybe."
 
+# NEW: AI generators for commands
+def ai_extralife_response(user):
+    try:
+        prompt = (
+            "Explain Extra Life in 1–2 short sentences for Twitch chat. "
+            "Mention it supports Children's Miracle Network Hospitals and Baystate. "
+            "Tell viewers to type !donate for the link. Keep <200 chars, playful."
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+                      {"role": "user", "content": prompt}],
+            max_tokens=90, temperature=0.9
+        )
+        return r.choices[0].message.content.strip()
+    except Exception as e:
+        print("!extralife AI error:", e)
+        return "Extra Life supports CMN Hospitals & Baystate with 24h game marathons. Type !donate for the link!"
+
+def ai_donate_response(user, url):
+    try:
+        prompt = (
+            f"Invite @{user} to donate to Extra Life for Baystate with a short hype line. "
+            f"Include this exact link: {url} . Keep it under 200 chars."
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+                      {"role": "user", "content": prompt}],
+            max_tokens=90, temperature=0.9
+        )
+        return r.choices[0].message.content.strip()
+    except Exception as e:
+        print("!donate AI error:", e)
+        return f"Donate to Extra Life for Baystate: {url}"
+
+def ai_8ball_response(user, question):
+    try:
+        q = question if question else "their fate"
+        prompt = (
+            f"As a snarky magic 8-ball, answer @{user}'s question about '{q}' with a short, punchy line. <200 chars."
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+                      {"role": "user", "content": prompt}],
+            max_tokens=50, temperature=0.9
+        )
+        return r.choices[0].message.content.strip()
+    except Exception as e:
+        print("!8ball AI error:", e)
+        return "Outlook… crunchy. Ask again after snacks."
+
+def ai_roll_response(user, sides, result):
+    try:
+        prompt = (
+            f"Announce that @{user} rolled a d{sides} and got {result}. "
+            "React with playful gremlin flair in <120 chars."
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+                      {"role": "user", "content": prompt}],
+            max_tokens=50, temperature=0.9
+        )
+        return r.choices[0].message.content.strip()
+    except Exception as e:
+        print("!roll AI error:", e)
+        return f"@{user} rolled a d{sides}: {result}"
+
+def ai_goon_response(user, percent):
+    try:
+        prompt = (
+            f"Tell @{user} their 'gooner' percentage is {percent}%. "
+            "Make it playful/teasing, under 120 chars."
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+                      {"role": "user", "content": prompt}],
+            max_tokens=40, temperature=0.9
+        )
+        return r.choices[0].message.content.strip()
+    except Exception as e:
+        print("!goon AI error:", e)
+        return f"@{user} goon index: {percent}%."
+
 # =====================================================
 # TIMER + TIME-OF-DAY HELPERS
 # =====================================================
@@ -244,7 +334,7 @@ def get_time_block():
     else:
         return "late"
 
-# ---- NEW: slot helper for !current (kept separate from time blocks) ----
+# ---- slot helper for !current (kept) ----
 def get_current_slot():
     """Return the description for the current time slot based on TIME_SLOTS."""
     now = now_local()
@@ -274,7 +364,6 @@ def generate_current_response(user):
     and falls back to a simple string if the API errors.
     """
     now = now_local()
-    # Example: "6:45 PM" without leading zero
     time_str = now.strftime("%I:%M %p").lstrip("0")
     slot_desc = get_current_slot()
 
@@ -299,89 +388,10 @@ def generate_current_response(user):
         print("!current error:", e)
         return f"It’s {time_str}. {slot_desc}"
 
-# ---- Timers ----
-
-timers = {}
-
-def _timer_key(user, name):
-    return f"{user.lower()}:{name.lower()[:40]}"
-
-def parse_duration(text):
-    if not text:
-        return 0
-    s = text.strip().lower()
-
-    if ":" in s:
-        parts = s.split(":")
-        try:
-            if len(parts) == 3:
-                h, m, sec = map(int, parts)
-                return h * 3600 + m * 60 + sec
-            elif len(parts) == 2:
-                m, sec = map(int, parts)
-                return m * 60 + sec
-        except ValueError:
-            return 0
-        return 0
-
-    total = 0
-    for amt, unit in re.findall(r'(\d+)\s*([hms])', s):
-        v = int(amt)
-        if unit == 'h':
-            total += v * 3600
-        elif unit == 'm':
-            total += v * 60
-        else:
-            total += v
-    if total == 0 and s.isdigit():
-        total = int(s)
-    return total
-
-def format_duration(seconds):
-    seconds = max(0, int(seconds))
-    h, rem = divmod(seconds, 3600)
-    m, s = divmod(rem, 60)
-    if h:
-        return f"{h}h{m}m{s}s"
-    if m:
-        return f"{m}m{s}s"
-    return f"{s}s"
-
-def start_timer(user, duration_s, name):
-    key = _timer_key(user, name)
-    end = time.time() + duration_s
-    timers[key] = {"user": user, "name": name, "end": end}
-    return key, end
-
-def time_left(user, name):
-    key = _timer_key(user, name)
-    t = timers.get(key)
-    if not t:
-        return None
-    return t["end"] - time.time()
-
-def list_user_timers(user):
-    out = []
-    now_ts = time.time()
-    for t in timers.values():
-        if t["user"].lower() == user.lower():
-            out.append((t["name"], max(0, t["end"] - now_ts)))
-    out.sort(key=lambda x: x[1])
-    return out
-
-def check_timers():
-    now_ts = time.time()
-    expired = [k for k, t in timers.items() if t["end"] <= now_ts]
-    for k in expired:
-        t = timers.pop(k, None)
-        if t:
-            send_message(f"⏰ @{t['user']} '{t['name']}' is done!")
-
 # =====================================================
 # STARTUP MESSAGE (AI dynamic)
 # =====================================================
 
-# Moved to after functions so it can call generate_startup_message()
 time.sleep(2)
 startup_line = generate_startup_message()
 send_message(startup_line)
@@ -419,7 +429,7 @@ def listen():
 
                 # ------------- COMMANDS ------------- #
 
-                # Timers
+                # Timers (kept)
                 if lower_msg.startswith("!timer"):
                     tokens = message.split(" ", 2)
                     if len(tokens) < 2:
@@ -465,45 +475,49 @@ def listen():
                         send_message(" | ".join(lines))
                     continue
 
-                # Current schedule/time
+                # Current schedule/time (kept AI)
                 if lower_msg.startswith("!current"):
                     reply = generate_current_response(username)
                     if reply:
                         send_message(f"@{username} {reply}")
                     continue
 
-                # NEW: Extra Life explainer
+                # AI: Extra Life explainer
                 if lower_msg.startswith("!extralife"):
-                    send_message(
-                        "Extra Life is a 24h gaming fundraiser for Children’s Miracle Network Hospitals. "
-                        "We’re supporting Baystate! Type !donate to help. ❤️"
-                    )
+                    reply = ai_extralife_response(username)
+                    send_message(reply)
                     continue
 
-                # NEW: Donate link
+                # AI: Donate link + hype
                 if lower_msg.startswith("!donate"):
-                    send_message(f"Donate here to support Baystate via Extra Life: {DONATE_URL}")
+                    reply = ai_donate_response(username, DONATE_URL)
+                    send_message(reply)
                     continue
 
-                # NEW: 8ball
+                # AI: Magic 8-ball (accepts optional question text)
                 if lower_msg.startswith("!8ball"):
-                    ans = random.choice(EIGHT_BALL_RESPONSES)
-                    send_message(f"@{username} 🎱 {ans}")
+                    q = message.split(" ", 1)[1].strip() if len(message.split(" ", 1)) == 2 else ""
+                    reply = ai_8ball_response(username, q)
+                    send_message(f"@{username} 🎱 {reply}")
                     continue
 
-                # NEW: goon
+                # AI: Goon percentage (stable per-user per-day)
                 if lower_msg.startswith("!goon"):
-                    ans = random.choice(GOON_RESPONSES)
-                    send_message(f"@{username} {ans}")
+                    seed_str = f"{username.lower()}:{now_local().strftime('%Y-%m-%d')}"
+                    rng = random.Random(seed_str)
+                    percent = rng.randint(0, 100)
+                    reply = ai_goon_response(username, percent)
+                    send_message(reply)
                     continue
 
-                # NEW: roll (d20)
+                # AI: Roll d20
                 if lower_msg.startswith("!roll"):
-                    roll = random.randint(1, 20)
-                    send_message(f"@{username} rolled a d20: {roll}")
+                    result = random.randint(1, 20)
+                    reply = ai_roll_response(username, 20, result)
+                    send_message(reply)
                     continue
 
-                # existing !satchfact command
+                # existing !satchfact command (kept)
                 if lower_msg.startswith("!satchfact"):
                     fact = generate_satchfact()
                     send_message(f"@{username} {fact}")
