@@ -64,14 +64,40 @@ Now invent a new Satch Fact:
 """
 
 # =====================================================
-# 🕰️ TIME-OF-DAY PROMPTS FOR !current (edit these)
+# 🕰️ TIME-OF-DAY PROMPTS FOR !current (existing; kept as-is)
 # =====================================================
 TIME_BLOCK_PROMPTS = {
     "morning":   "It's morning. Give a playful coffee-gremlin check-in to chat.",
     "afternoon": "It's afternoon. Toss a breezy, mid-day quip that invites small talk.",
-    "evening":   "It's evening. Cozy gamer-night vibe; tease raids & loot.",
+    "evening":   "It's evening. Cozy gamer-night vibe.",
     "late":      "It's late night. Sleepy chaos gremlin energy; keep it short and weird."
 }
+
+# =====================================================
+# 🗓️ STREAM SCHEDULE PROMPTS FOR !current (NEW, EDIT THESE)
+# =====================================================
+# You asked for these specific time slots:
+#  - 11:50am–12pm
+#  - 12pm–6pm
+#  - 6pm (treated as 6:00pm–6:30pm so it's a usable window)
+#  - 6:30pm–8pm
+#  - 8pm–12am
+#  - 12am–2am
+#  - 2am–6am
+#  - 6am–8am
+#  - 8am–12pm
+# Times below are in 24h "HH:MM" and use your LOCAL_TZ.
+TIME_SLOTS = [
+    ("11:50", "12:00", "Pre-show chaos. You should warm up chat and get them ready for Extra Life."),
+    ("12:00", "18:00", "Main stream time! Tell the user that Satch is playing a True 100% speedrun of Ocarina of Time with Crowd Control."),
+    ("18:00", "18:30", "Dinner break. Tell the user that Satch is gorging on pizza at the moment."),
+    ("18:30", "20:00", "Main stream time! Tell the user that Satch is playing a True 100% speedrun of Ocarina of Time with Crowd Control."),
+    ("20:00", "00:00", "Tell the user that The Dungeons and Dragons has started! Cosmonaut Tabletop joins us to do a DnD Oneshot with Marcus, Dan, Sara and Vero!"),
+    ("00:00", "02:00", "Late-night crew! Tell the user that we are now in the Craft Corner, making arts and crafts! All items created will be raffled off to whoever buys the digital raffle tickets on the extra life page: https://www.extra-life.org/participants/552019."),
+    ("02:00", "06:00", "Scary spooky night has descended! Tell the user that Satch is playing witching hour spooky games!"),
+    ("06:00", "08:00", "Breakfast time! Tell the user that Satch is cooking up some breakfast for himself."),
+    ("08:00", "12:00", "Great Ape's Big Finale! Tell the user that Satch is now self deprived and will be trying to beat as many FF14 Extreme trails as he can while fighting the true boss: self deprivation."),
+]
 
 # =====================================================
 # CONFIGURATION
@@ -117,7 +143,7 @@ def send_message(msg):
 
 # Startup message
 time.sleep(2)
-send_message("Greggnog is here. Be very scared. Just kidding hehe")
+send_message("Oh my god, I understand time now.")
 
 # =====================================================
 # OPENAI RESPONSE HANDLERS
@@ -178,16 +204,52 @@ def get_time_block():
     else:
         return "late"
 
+# ---- NEW: slot helper for !current (kept separate from time blocks) ----
+def get_current_slot():
+    """Return the description for the current time slot based on TIME_SLOTS."""
+    now = now_local()
+    now_hm = now.strftime("%H:%M")
+
+    def to_minutes(hm):
+        h, m = map(int, hm.split(":"))
+        return h * 60 + m
+
+    now_min = to_minutes(now_hm)
+    for start, end, desc in TIME_SLOTS:
+        s, e = to_minutes(start), to_minutes(end)
+        # normal window
+        if s <= e:
+            if s <= now_min < e:
+                return desc
+        # wrap-around window (e.g., 20:00 -> 00:00)
+        else:
+            if now_min >= s or now_min < e:
+                return desc
+    return "No scheduled stream right now — Greggnog is probably scheming."
+
 def generate_current_response(user):
-    """AI reply for !current based on time block and TIME_BLOCK_PROMPTS."""
-    block = get_time_block()
-    prompt = TIME_BLOCK_PROMPTS.get(block, "Say hi in a time-agnostic way.")
+    """
+    Respond to !current by stating the exact local time and what's happening
+    based on the TIME_SLOTS descriptions above. Uses OpenAI for flavor,
+    and falls back to a simple string if the API errors.
+    """
+    now = now_local()
+    # Example: "6:45 PM" without leading zero
+    time_str = now.strftime("%I:%M %p").lstrip("0")
+    slot_desc = get_current_slot()
+
+    prompt = (
+        f"The current local time is {time_str}. "
+        f"Tell @{user} what’s happening on stream right now: {slot_desc} "
+        "Answer in Greggnog’s personality — witty, chaotic, affectionate, under 200 characters."
+    )
+
     try:
         resp = client_ai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": GREGGNOG_PERSONALITY},
-                {"role": "user", "content": f"{prompt} Address @{user} and the channel."}
+                {"role": "user", "content": prompt}
             ],
             max_tokens=120,
             temperature=0.9
@@ -195,7 +257,7 @@ def generate_current_response(user):
         return resp.choices[0].message.content.strip()
     except Exception as e:
         print("!current error:", e)
-        return f"It's {block}. Hi @{user}."
+        return f"It’s {time_str}. {slot_desc}"
 
 # ---- Timers ----
 
