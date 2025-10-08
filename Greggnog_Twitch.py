@@ -3,7 +3,7 @@ import socket
 import ssl
 import time
 import re
-from datetime import datetime
+from datetime import datetime, timedelta  # <-- added timedelta
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
 except Exception:
@@ -191,7 +191,11 @@ def generate_satchfact():
 # =====================================================
 
 def now_local():
-    return datetime.now(TZINFO) if TZINFO else datetime.now()
+    # HARD-WIRED EASTERN STANDARD TIME (UTC-05:00), no DST adjustments
+    try:
+        return datetime.utcnow() - timedelta(hours=5)
+    except Exception:
+        return datetime.now()
 
 def get_time_block():
     h = now_local().hour
