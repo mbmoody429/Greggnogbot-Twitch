@@ -3,8 +3,8 @@ import socket
 import ssl
 import time
 import re
-import random  # <-- used for !roll and seeded % for !goon
-from datetime import datetime, timedelta  # <-- added timedelta
+import random  # <-- used for !roll and goon %
+from datetime import datetime, timedelta, timezone  # <-- added timedelta
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
 except Exception:
@@ -122,7 +122,7 @@ client_ai = OpenAI(api_key=OPENAI_API_KEY)
 # Extra Life donate link constant
 DONATE_URL = "https://www.extra-life.org/participants/552019/donate"
 
-# (Kept for compatibility; now AI-driven but we keep these arrays as requested)
+# (Kept for compatibility; other commands now AI-driven)
 EIGHT_BALL_RESPONSES = [
     "Yes.", "No.", "Maybe.", "Absolutely.", "Absolutely not.", "Ask again later.",
     "Outlook good.", "Outlook grim.", "Chaotic yes.", "Gremlin says no.",
@@ -208,7 +208,7 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            f"Say a one-line greeting for Twitch chat as Greggnog at {time_str}. "
+            f"Say a one-line greeting for Twitch chat as Greggnog at {time_str}. Be mystified about time zone and time in general."
             f"Include a tiny nod to: {slot_desc}. Keep it under 200 characters."
         )
         response = client_ai.chat.completions.create(
@@ -295,6 +295,26 @@ def ai_roll_response(user, sides, result):
         print("!roll AI error:", e)
         return f"@{user} rolled a d{sides}: {result}"
 
+# NEW: multi-dice AI response
+def ai_roll_many_response(user, n, sides, rolls, total):
+    try:
+        # keep result list short so AI can fit under char limit
+        display = ",".join(map(str, rolls[:10])) + ("…" if len(rolls) > 10 else "")
+        prompt = (
+            f"Announce @{user} rolled {n}d{sides}: [{display}] total={total}. "
+            "Playful gremlin flair, under 140 chars."
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+                      {"role": "user", "content": prompt}],
+            max_tokens=80, temperature=0.9
+        )
+        return r.choices[0].message.content.strip()
+    except Exception as e:
+        print("!roll many AI error:", e)
+        return f"@{user} rolled {n}d{sides} → {total}"
+
 def ai_goon_response(user, percent):
     try:
         prompt = (
@@ -317,11 +337,38 @@ def ai_goon_response(user, percent):
 # =====================================================
 
 def now_local():
-    # HARD-WIRED EASTERN STANDARD TIME (UTC-05:00), no DST adjustments
-    try:
-        return datetime.utcnow() - timedelta(hours=5)
-    except Exception:
-        return datetime.now()
+    """
+    Eastern Time with DST (America/New_York).
+    Uses ZoneInfo if available; otherwise falls back to an approximate DST rule.
+    """
+    # Preferred: real IANA timezone (exact, handles DST switches to the minute)
+    if ZoneInfo is not None:
+        try:
+            et = ZoneInfo("America/New_York")
+            return datetime.now(timezone.utc).astimezone(et)
+        except Exception:
+            pass
+
+    # Fallback (no tzdata): approximate US DST by date (good enough outside the switch hour)
+    utc_now = datetime.utcnow()
+    y = utc_now.year
+
+    def nth_weekday(year, month, weekday, n):
+        # weekday Mon=0..Sun=6; n=1=first, 2=second, etc.
+        d = datetime(year, month, 1)
+        shift = (weekday - d.weekday()) % 7
+        day = 1 + shift + 7 * (n - 1)
+        return d.replace(day=day)
+
+    # Second Sunday in March (DST starts), first Sunday in November (DST ends)
+    dst_start = nth_weekday(y, 3, 6, 2)   # local 2am, but date-level is fine for fallback
+    dst_end   = nth_weekday(y, 11, 6, 1)
+    day_of_year = utc_now.timetuple().tm_yday
+    in_dst = dst_start.timetuple().tm_yday <= day_of_year < dst_end.timetuple().tm_yday
+
+    offset_hours = -4 if in_dst else -5  # EDT vs EST
+    return utc_now + timedelta(hours=offset_hours)
+
 
 def get_time_block():
     h = now_local().hour
@@ -510,11 +557,30 @@ def listen():
                     send_message(reply)
                     continue
 
-                # AI: Roll d20
+                # NEW: AI: Roll NdM dice (defaults to d20)
                 if lower_msg.startswith("!roll"):
-                    result = random.randint(1, 20)
-                    reply = ai_roll_response(username, 20, result)
-                    send_message(reply)
+                    arg = ""
+                    parts_roll = message.split(" ", 1)
+                    if len(parts_roll) == 2:
+                        arg = parts_roll[1].strip().lower().replace(" ", "")
+                    # parse NdM or dM
+                    n, sides = 1, 20
+                    m = re.match(r'^(\d*)d(\d+)$', arg) if arg else None
+                    if m:
+                        n = int(m.group(1)) if m.group(1) else 1
+                        sides = int(m.group(2))
+                        # clamp to sane bounds
+                        n = max(1, min(n, 20))
+                        sides = max(2, min(sides, 1000))
+                        rolls = [random.randint(1, sides) for _ in range(n)]
+                        total = sum(rolls)
+                        reply = ai_roll_many_response(username, n, sides, rolls, total)
+                        send_message(reply)
+                    else:
+                        # default single d20
+                        result = random.randint(1, 20)
+                        reply = ai_roll_response(username, 20, result)
+                        send_message(reply)
                     continue
 
                 # existing !satchfact command (kept)
