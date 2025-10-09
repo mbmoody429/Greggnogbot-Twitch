@@ -119,6 +119,10 @@ if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
 
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
 
+# ===== Spontaneous chatter config =====
+SPONT_COOLDOWN = 30 * 60  # 30 minutes
+last_spontaneous_ts = 0    # set on startup so first line is after cooldown
+
 # Extra Life donate link constant
 DONATE_URL = "https://www.extra-life.org/participants/552019/donate"
 
@@ -208,8 +212,8 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            f"Say a one-line greeting for Twitch chat as Greggnog at {time_str}. Be mystified about time zone and time in general."
-            f"Include a tiny nod to: {slot_desc}. Keep it under 200 characters."
+            f"Inform chat that you were reset at {time_str} and you are not happy about it. Be mystified about time zone and time in general."
+            f"You are incredibly scared of time. Keep it under 200 characters."
         )
         response = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -319,7 +323,7 @@ def ai_goon_response(user, percent):
     try:
         prompt = (
             f"Tell @{user} their 'gooner' percentage is {percent}%. "
-            "Make it playful/teasing, under 120 chars."
+            "Make it playful/teasing, and always say that Fletcher1027 has an off the charts gooner percentage, under 120 chars."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -515,6 +519,47 @@ def check_timers():
         if t:
             send_message(f"⏰ @{t['user']} '{t['name']}' is done!")
 
+# ====== NEW: SPONTANEOUS CHATTER (every 30 min max) ======
+
+def generate_spontaneous_line():
+    """One-line, time-aware gremlin quip for spontaneous chatter."""
+    try:
+        now = now_local()
+        time_str = now.strftime("%I:%M %p").lstrip("0")
+        slot_desc = get_current_slot()
+        prompt = (
+            f"Spontaneous one-liner for Twitch chat as Greggnog. "
+            f"It's {time_str}. Nod to: {slot_desc}. "
+            "Keep under 200 characters; playful, chaotic, affectionate."
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": GREGGNOG_PERSONALITY},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=90,
+            temperature=0.9
+        )
+        return r.choices[0].message.content.strip()
+    except Exception as e:
+        print("Spontaneous AI error:", e)
+        return None
+
+def maybe_spontaneous():
+    """Send a spontaneous line if cooldown has elapsed."""
+    global last_spontaneous_ts
+    now_ts = time.time()
+    # On first run, start the cooldown so we don't speak immediately at boot.
+    if last_spontaneous_ts == 0:
+        last_spontaneous_ts = now_ts
+        return
+    if now_ts - last_spontaneous_ts >= SPONT_COOLDOWN:
+        line = generate_spontaneous_line()
+        if line:
+            send_message(line)
+        last_spontaneous_ts = now_ts
+
 # =====================================================
 # STARTUP MESSAGE (AI dynamic)
 # =====================================================
@@ -522,6 +567,8 @@ def check_timers():
 time.sleep(2)
 startup_line = generate_startup_message()
 send_message(startup_line)
+# start spontaneous cooldown from boot
+last_spontaneous_ts = time.time()
 
 # =====================================================
 # MAIN LISTEN LOOP
@@ -677,6 +724,7 @@ def listen():
                         send_message(f"@{username} {reply}")
 
             check_timers()
+            maybe_spontaneous()  # <-- NEW ticker
 
         except Exception as e:
             print("Error in main loop:", e)
