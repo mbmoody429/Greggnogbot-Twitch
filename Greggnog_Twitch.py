@@ -120,7 +120,7 @@ if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
 
 # ===== Spontaneous chatter config =====
-SPONT_COOLDOWN = 30 * 60  # 30 minutes
+SPONT_COOLDOWN = 5 * 60   # ***** CHANGED: 5 minutes *****
 last_spontaneous_ts = 0    # set on startup so first line is after cooldown
 
 # ===== On-topic spontaneous chat context =====
@@ -210,40 +210,14 @@ def generate_satchfact():
         print("SatchFact error:", e)
         return "Satch once tried to debug a sandwich."
 
-# NEW: AI dynamic startup line (kept)
+# NEW: AI dynamic startup line — now mirrors spontaneous logic
 def generate_startup_message():
-    """One-line, time-aware gremlin quip for spontaneous chatter, influenced by recent chat."""
-    try:
-        now = now_local()
-        time_str = now.strftime("%I:%M %p").lstrip("0")
-        slot_desc = get_current_slot()
-        chat_transcript, _ = get_recent_chat_context()
-
-        prompt = (
-            f"Spontaneous one-liner for Twitch chat as {greggnog_personality}. It's {time_str}. "
-            f"Nod to: {slot_desc}. Keep under 200 characters; playful, chaotic, affectionate."
-        )
-
-        if chat_transcript:
-            prompt += (
-                "\n\nRecent chat (latest last):\n"
-                f"{chat_transcript}\n"
-                "Respond to the conversation; don't repeat lines verbatim; avoid negative callouts; keep it concise."
-            )
-
-        r = client_ai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": GREGGNOG_PERSONALITY},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=90,
-            temperature=0.9
-        )
-        return r.choices[0].message.content.strip()
-    except Exception as e:
-        print("Spontaneous AI error:", e)
-        return None
+    """Generate the same style line as spontaneous chatter so it looks continuous."""
+    line = generate_spontaneous_line()
+    if not line:
+        # fallback, short and generic
+        return "hi chat. i was here the whole time. definitely not rebooted. 👀"
+    return line
 
 # NEW: AI generators for commands
 def ai_extralife_response(user):
@@ -535,7 +509,7 @@ def check_timers():
         if t:
             send_message(f"⏰ @{t['user']} '{t['name']}' is done!")
 
-# ====== NEW: SPONTANEOUS CHATTER (every 30 min max) ======
+# ====== NEW: SPONTANEOUS CHATTER (every 5 min max) ======
 
 def get_recent_chat_context(max_lines=12):
     """Return (transcript_text, count) for chat in the last SPONT_ACTIVITY_WINDOW seconds."""
@@ -784,7 +758,7 @@ def listen():
                         send_message(f"@{username} {reply}")
 
             check_timers()
-            maybe_spontaneous()  # <-- NEW ticker
+            maybe_spontaneous()  # <-- ticker
 
         except Exception as e:
             print("Error in main loop:", e)
