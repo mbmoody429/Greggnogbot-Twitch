@@ -435,6 +435,86 @@ def generate_current_response(user):
         print("!current error:", e)
         return f"It’s {time_str}. {slot_desc}"
 
+# ====== RESTORED TIMER HELPERS (added back) ======
+
+timers = {}
+
+def _timer_key(user, name):
+    return f"{user.lower()}:{name.lower()[:40]}"
+
+def parse_duration(text):
+    if not text:
+        return 0
+    s = text.strip().lower()
+
+    # Support 1:30 or 1:30:00
+    if ":" in s:
+        parts = s.split(":")
+        try:
+            if len(parts) == 3:
+                h, m, sec = map(int, parts)
+                return h * 3600 + m * 60 + sec
+            elif len(parts) == 2:
+                m, sec = map(int, parts)
+                return m * 60 + sec
+        except ValueError:
+            return 0
+        return 0
+
+    # Support 1h30m20s / 5m / 10s
+    total = 0
+    for amt, unit in re.findall(r'(\d+)\s*([hms])', s):
+        v = int(amt)
+        if unit == 'h':
+            total += v * 3600
+        elif unit == 'm':
+            total += v * 60
+        else:
+            total += v
+    if total == 0 and s.isdigit():  # bare seconds
+        total = int(s)
+    return total
+
+def format_duration(seconds):
+    seconds = max(0, int(seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h{m}m{s}s"
+    if m:
+        return f"{m}m{s}s"
+    return f"{s}s"
+
+def start_timer(user, duration_s, name):
+    key = _timer_key(user, name)
+    end = time.time() + duration_s
+    timers[key] = {"user": user, "name": name, "end": end}
+    return key, end
+
+def time_left(user, name):
+    key = _timer_key(user, name)
+    t = timers.get(key)
+    if not t:
+        return None
+    return t["end"] - time.time()
+
+def list_user_timers(user):
+    out = []
+    now_ts = time.time()
+    for t in timers.values():
+        if t["user"].lower() == user.lower():
+            out.append((t["name"], max(0, t["end"] - now_ts)))
+    out.sort(key=lambda x: x[1])
+    return out
+
+def check_timers():
+    now_ts = time.time()
+    expired = [k for k, t in timers.items() if t["end"] <= now_ts]
+    for k in expired:
+        t = timers.pop(k, None)
+        if t:
+            send_message(f"⏰ @{t['user']} '{t['name']}' is done!")
+
 # =====================================================
 # STARTUP MESSAGE (AI dynamic)
 # =====================================================
@@ -557,7 +637,7 @@ def listen():
                     send_message(reply)
                     continue
 
-                # NEW: AI: Roll NdM dice (defaults to d20)
+                # AI: Roll NdM dice (defaults to d20)
                 if lower_msg.startswith("!roll"):
                     arg = ""
                     parts_roll = message.split(" ", 1)
