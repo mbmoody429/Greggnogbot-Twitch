@@ -304,9 +304,9 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            "You had a trivia function added to you, Greggnog. "
-            f"It hurt."
-            "Mention booting, restarting, waking, or updates. <200 chars."
+            "Give a single playful one-liner for Twitch chat as Greggnog. "
+            f"Act like you've been here the whole time. It's {time_str}. DO NOT use quotation marks."
+            "DO NOT mention booting, restarting, waking, or updates. <200 chars."
         )
         response = client_ai.chat.completions.create(
             model="gpt-4o-mini",
