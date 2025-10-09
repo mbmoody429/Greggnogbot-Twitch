@@ -4,6 +4,7 @@ import ssl
 import time
 import re
 import random  # <-- used for !roll and goon %
+from collections import deque
 from datetime import datetime, timedelta, timezone  # <-- added timedelta
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
@@ -122,6 +123,11 @@ client_ai = OpenAI(api_key=OPENAI_API_KEY)
 SPONT_COOLDOWN = 30 * 60  # 30 minutes
 last_spontaneous_ts = 0    # set on startup so first line is after cooldown
 
+# ===== On-topic spontaneous chat context =====
+CHAT_CONTEXT = deque(maxlen=120)         # rolling buffer of recent chat
+SPONT_ACTIVITY_WINDOW = 10 * 60          # consider last 10 minutes
+SPONT_MIN_LINES = 4                      # require at least this many lines in window
+
 # Extra Life donate link constant
 DONATE_URL = "https://www.extra-life.org/participants/552019/donate"
 
@@ -211,7 +217,7 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            f"Say something random."
+            f"Read the chat history and answer in topic as Greggnog, here is your personality: {GREGGNOG_PERSONALITY}."
             f"Keep it under 200 characters."
         )
         response = client_ai.chat.completions.create(
@@ -520,17 +526,34 @@ def check_timers():
 
 # ====== NEW: SPONTANEOUS CHATTER (every 30 min max) ======
 
+def get_recent_chat_context(max_lines=12):
+    """Return (transcript_text, count) for chat in the last SPONT_ACTIVITY_WINDOW seconds."""
+    now_ts = time.time()
+    recent = [(u, m) for (ts, u, m) in CHAT_CONTEXT if now_ts - ts <= SPONT_ACTIVITY_WINDOW]
+    tail = recent[-max_lines:]
+    transcript = "\n".join(f"{u}: {m}" for (u, m) in tail)
+    return transcript, len(recent)
+
 def generate_spontaneous_line():
-    """One-line, time-aware gremlin quip for spontaneous chatter."""
+    """One-line, time-aware gremlin quip for spontaneous chatter, influenced by recent chat."""
     try:
         now = now_local()
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
+        chat_transcript, _ = get_recent_chat_context()
+
         prompt = (
-            f"Spontaneous one-liner for Twitch chat as Greggnog. "
-            f"It's {time_str}. Nod to: {slot_desc}. "
-            "Keep under 200 characters; playful, chaotic, affectionate."
+            f"Spontaneous one-liner for Twitch chat as Greggnog. It's {time_str}. "
+            f"Nod to: {slot_desc}. Keep under 200 characters; playful, chaotic, affectionate."
         )
+
+        if chat_transcript:
+            prompt += (
+                "\n\nRecent chat (latest last):\n"
+                f"{chat_transcript}\n"
+                "Respond to the vibe; don't repeat lines verbatim; avoid negative callouts; keep it concise."
+            )
+
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -546,13 +569,20 @@ def generate_spontaneous_line():
         return None
 
 def maybe_spontaneous():
-    """Send a spontaneous line if cooldown has elapsed."""
+    """Send a spontaneous line if cooldown elapsed AND there was enough recent chat."""
     global last_spontaneous_ts
     now_ts = time.time()
+
     # On first run, start the cooldown so we don't speak immediately at boot.
     if last_spontaneous_ts == 0:
         last_spontaneous_ts = now_ts
         return
+
+    # Require some activity in the recent window
+    _, count = get_recent_chat_context()
+    if count < SPONT_MIN_LINES:
+        return
+
     if now_ts - last_spontaneous_ts >= SPONT_COOLDOWN:
         line = generate_spontaneous_line()
         if line:
@@ -572,6 +602,23 @@ last_spontaneous_ts = time.time()
 # =====================================================
 # MAIN LISTEN LOOP
 # =====================================================
+
+# Ignore these users when collecting chat context
+IGNORE_USERS = { (BOT_NICK or "").lower(), "streamelements", "nightbot", "moobot" }
+
+def record_chat_line(user, text):
+    """Keep recent non-command chat for context-aware spontaneous replies."""
+    ts = time.time()
+    msg = (text or "").strip()
+    if not msg:
+        return
+    if user.lower() in IGNORE_USERS:
+        return
+    if msg.startswith("!"):  # skip commands
+        return
+    if len(msg) > 300:
+        msg = msg[:300]
+    CHAT_CONTEXT.append((ts, user, msg))
 
 def listen():
     buffer = ""
@@ -599,6 +646,9 @@ def listen():
                 message = parts[3][1:]
                 lower_msg = message.lower().strip()
                 print(f"[{username}] {message}")
+
+                # record chat for spontaneous context (non-destructive)
+                record_chat_line(username, message)
 
                 # ------------- COMMANDS ------------- #
 
