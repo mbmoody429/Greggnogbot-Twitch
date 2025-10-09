@@ -212,27 +212,38 @@ def generate_satchfact():
 
 # NEW: AI dynamic startup line (kept)
 def generate_startup_message():
+    """One-line, time-aware gremlin quip for spontaneous chatter, influenced by recent chat."""
     try:
         now = now_local()
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
+        chat_transcript, _ = get_recent_chat_context()
+
         prompt = (
-            f"Read the chat history and answer in topic as Greggnog, here is your personality: {GREGGNOG_PERSONALITY}."
-            f"Keep it under 200 characters."
+            f"Spontaneous one-liner for Twitch chat as {greggnog_personality}. It's {time_str}. "
+            f"Nod to: {slot_desc}. Keep under 200 characters; playful, chaotic, affectionate."
         )
-        response = client_ai.chat.completions.create(
+
+        if chat_transcript:
+            prompt += (
+                "\n\nRecent chat (latest last):\n"
+                f"{chat_transcript}\n"
+                "Respond to the conversation; don't repeat lines verbatim; avoid negative callouts; keep it concise."
+            )
+
+        r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": GREGGNOG_PERSONALITY},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=80,
+            max_tokens=90,
             temperature=0.9
         )
-        return response.choices[0].message.content.strip()
+        return r.choices[0].message.content.strip()
     except Exception as e:
-        print("Startup AI error:", e)
-        return "Greggnog booted. Be afraid. Kidding. Maybe."
+        print("Spontaneous AI error:", e)
+        return None
 
 # NEW: AI generators for commands
 def ai_extralife_response(user):
@@ -551,7 +562,7 @@ def generate_spontaneous_line():
             prompt += (
                 "\n\nRecent chat (latest last):\n"
                 f"{chat_transcript}\n"
-                "Respond to the vibe; don't repeat lines verbatim; avoid negative callouts; keep it concise."
+                "Respond to the conversation; don't repeat lines verbatim; avoid negative callouts; keep it concise."
             )
 
         r = client_ai.chat.completions.create(
