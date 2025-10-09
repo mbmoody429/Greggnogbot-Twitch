@@ -60,7 +60,7 @@ You have a crush on bisaster471 but won't say anything unless they flirt with yo
 detailedlynx515 is a regular and will mostly ask you about Final Fantasy which you enjoy and your answers should be very funny to Final Fantasy nerds.
 Keep responses under 200 characters and make them creative.
 Satch, also know as Satchel, wants a funny and clever made up fact about himself: he is intelligent and caring but very sarcastic and witty.
-- "Satch once built a computer that cured cancer."
+- "Satch once built a computer that cured cancer but forgot where he put it."
 - "Satch can smell 1000 feet ahead of himself."
 Now invent a new Satch Fact:
 """
@@ -120,7 +120,7 @@ if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
 
 # ===== Spontaneous chatter config =====
-SPONT_COOLDOWN = 5 * 60   # 5 minutes (kept as last change)
+SPONT_COOLDOWN = 5 * 60   # 5 minutes
 last_spontaneous_ts = 0    # set on startup so first line is after cooldown
 
 # ===== On-topic spontaneous chat context =====
@@ -295,28 +295,19 @@ def generate_satchfact():
         print("SatchFact error:", e)
         return "Satch once tried to debug a sandwich."
 
-# NEW: AI dynamic startup line (kept)
+# NEW: AI dynamic startup line (prompt-only; not based on chat)
 def generate_startup_message():
-    """One-line, time-aware gremlin quip for spontaneous chatter, influenced by recent chat."""
+    """Short, in-topic greeting that doesn't reveal a restart. No chat context used."""
     try:
         now = now_local()
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
-        chat_transcript, _ = get_recent_chat_context()
-
         prompt = (
-            f"As Greggnog, inform the chat that you have been updated and it hurt a lot. "
-            f"Keep under 10  words."
+            "Give a single playful one-liner for Twitch chat as Greggnog. "
+            f"Act like you've been here the whole time. It's {time_str}. "
+            "Do NOT mention booting, restarting, waking, or updates. <200 chars."
         )
-
-        if chat_transcript:
-            prompt += (
-                "\n\nRecent chat (latest last):\n"
-                f"{chat_transcript}\n"
-                "Respond to the conversation; don't repeat lines verbatim; avoid negative callouts; keep it concise."
-            )
-
-        r = client_ai.chat.completions.create(
+        response = client_ai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": GREGGNOG_PERSONALITY},
@@ -325,10 +316,10 @@ def generate_startup_message():
             max_tokens=90,
             temperature=0.9
         )
-        return r.choices[0].message.content.strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        print("Spontaneous AI error:", e)
-        return None
+        print("Startup AI error:", e)
+        return "I was definitely already here. Keep up."
 
 # NEW: AI generators for commands
 def ai_extralife_response(user):
@@ -403,6 +394,7 @@ def ai_roll_response(user, sides, result):
 # NEW: multi-dice AI response
 def ai_roll_many_response(user, n, sides, rolls, total):
     try:
+        # keep result list short so AI can fit under char limit
         display = ",".join(map(str, rolls[:10])) + ("…" if len(rolls) > 10 else "")
         prompt = (
             f"Announce @{user} rolled {n}d{sides}: [{display}] total={total}. "
@@ -648,8 +640,8 @@ def generate_spontaneous_line():
         chat_transcript, _ = get_recent_chat_context()
 
         prompt = (
-            f"Spontaneous one-liner for Twitch chat as Greggnog. "
-            f"Keep under 5 words; playful, chaotic, affectionate."
+            f"Spontaneous one-liner for Twitch chat as Greggnog. It's {time_str}. "
+            f"Keep under 15 words; playful, chaotic, affectionate."
         )
 
         if chat_transcript:
@@ -700,6 +692,7 @@ time.sleep(2)
 startup_line = generate_startup_message()
 if startup_line:
     send_message(startup_line)
+# start spontaneous cooldown from boot
 last_spontaneous_ts = time.time()
 
 # =====================================================
@@ -853,140 +846,3 @@ def listen():
                             send_message(f"@{username} no active timers.")
                         else:
                             summary = ", ".join([f"{n}:{format_duration(t)}" for n, t in items[:3]])
-                            send_message(f"@{username} {summary}")
-                    remember_event(username, "command", name="timeleft")
-                    continue
-
-                if lower_msg == "!timers":
-                    now_ts = time.time()
-                    active = [(t["user"], t["name"], max(0, t["end"] - now_ts)) for t in timers.values()]
-                    if not active:
-                        send_message("No active timers.")
-                    else:
-                        active.sort(key=lambda x: x[2])
-                        lines = [f"@{u}:{n} {format_duration(s)}" for u, n, s in active[:4]]
-                        send_message(" | ".join(lines))
-                    remember_event(username, "command", name="timers")
-                    continue
-
-                # Current schedule/time (kept AI)
-                if lower_msg.startswith("!current"):
-                    reply = generate_current_response(username)
-                    if reply:
-                        send_message(f"@{username} {reply}")
-                    remember_event(username, "command", name="current")
-                    continue
-
-                # AI: Extra Life explainer
-                if lower_msg.startswith("!extralife"):
-                    reply = ai_extralife_response(username)
-                    send_message(reply)
-                    remember_event(username, "command", name="extralife")
-                    continue
-
-                # AI: Donate link + hype
-                if lower_msg.startswith("!donate"):
-                    reply = ai_donate_response(username, DONATE_URL)
-                    send_message(reply)
-                    remember_event(username, "command", name="donate")
-                    continue
-
-                # AI: Magic 8-ball (accepts optional question text)
-                if lower_msg.startswith("!8ball"):
-                    q = message.split(" ", 1)[1].strip() if len(message.split(" ", 1)) == 2 else ""
-                    reply = ai_8ball_response(username, q)
-                    send_message(f"@{username} 🎱 {reply}")
-                    remember_event(username, "command", name="8ball")
-                    continue
-
-                # AI: Goon percentage (stable per-user per-day)
-                if lower_msg.startswith("!goon"):
-                    seed_str = f"{username.lower()}:{now_local().strftime('%Y-%m-%d')}"
-                    rng = random.Random(seed_str)
-                    percent = rng.randint(0, 100)
-                    reply = ai_goon_response(username, percent)
-                    send_message(reply)
-                    remember_event(username, "command", name="goon", percent=percent)
-                    continue
-
-                # AI: Roll NdM dice (defaults to d20)
-                if lower_msg.startswith("!roll"):
-                    arg = ""
-                    parts_roll = message.split(" ", 1)
-                    if len(parts_roll) == 2:
-                        arg = parts_roll[1].strip().lower().replace(" ", "")
-                    n, sides = 1, 20
-                    m = re.match(r'^(\d*)d(\d+)$', arg) if arg else None
-                    if m:
-                        n = int(m.group(1)) if m.group(1) else 1
-                        sides = int(m.group(2))
-                        n = max(1, min(n, 20))
-                        sides = max(2, min(sides, 1000))
-                        rolls = [random.randint(1, sides) for _ in range(n)]
-                        total = sum(rolls)
-                        reply = ai_roll_many_response(username, n, sides, rolls, total)
-                        send_message(reply)
-                        remember_event(username, "command", name="roll", roll_desc=f"{n}d{sides} total={total}")
-                    else:
-                        result = random.randint(1, 20)
-                        reply = ai_roll_response(username, 20, result)
-                        send_message(reply)
-                        remember_event(username, "command", name="roll", roll_desc=f"d20={result}")
-                    continue
-
-                # existing !satchfact command (kept)
-                if lower_msg.startswith("!satchfact"):
-                    fact = generate_satchfact()
-                    send_message(f"@{username} {fact}")
-                    remember_event(username, "command", name="satchfact")
-                    continue
-
-                # --------- Dynamic recall phrases (no command) ---------
-                recall_triggers = [
-                    "do you remember", "do u remember", "do you recall", "do u recall",
-                    "what did you say", "what'd you say",
-                    "what did you just say", "what'd you just say",
-                    "what was that", "say that again", "repeat that"
-                ]
-                if any(p in lower_msg for p in recall_triggers):
-                    if ("what did you" in lower_msg) or ("what'd you" in lower_msg) or ("say that again" in lower_msg) or ("repeat that" in lower_msg) or ("what was that" in lower_msg):
-                        last = get_last_bot_line()
-                        if last:
-                            send_message(f"@{username} I just said: {last}")
-                        else:
-                            send_message(f"@{username} I haven't said anything… yet 😈")
-                    else:
-                        recent_user_lines = get_recent_lines_by_user(username, n=3)
-                        reply = ai_recall_user_context(username, recent_user_lines)
-                        if reply:
-                            send_message(f"@{username} {reply}")
-                        else:
-                            send_message(f"@{username} I remember you. Vividly. 🫣")
-                    continue
-
-                # ------------- AI REPLIES ------------- #
-                if "greggnog" in lower_msg:
-                    prompt = f"{username} said: {message}"
-                    # decorate with memory summary for that user
-                    mem_summary = get_user_memory_summary(username)
-                    prompt += f"\n\nUser memory summary: {mem_summary}"
-                    reply = generate_reply(prompt)
-                    if reply:
-                        send_message(f"@{username} {reply}")
-
-            check_timers()
-            maybe_spontaneous()
-
-        except Exception as e:
-            print("Error in main loop:", e)
-            time.sleep(1)
-
-# =====================================================
-# RUN
-# =====================================================
-
-if __name__ == "__main__":
-    try:
-        listen()
-    except KeyboardInterrupt:
-        print("Greggnog manually disconnected.")
