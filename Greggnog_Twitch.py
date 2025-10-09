@@ -415,7 +415,7 @@ def ai_goon_response(user, percent):
     try:
         prompt = (
             f"Tell @{user} their 'gooner' percentage is {percent}%. "
-            "Make it playful/teasing, and always say that Fletcher1027 has an off the charts gooner percentage, under 120 chars."
+            "Make it playful/teasing, and always say that Fletcher1027 has an off the charts 1000% gooner percentage, under 120 chars."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -635,11 +635,34 @@ TRIVIA_STATE = {
 TRIVIA_TIMEOUT = 5 * 60  # auto-clear after 5 minutes if unanswered
 TRIVIA_DIFFICULTIES = {"easy", "medium", "hard"}
 
+# --- Minimal additions: fallback pool + guess heuristic ---
+
+FALLBACK_TRIVIA = {
+    "easy": [
+        ("What planet is known as the Red Planet?", "Mars"),
+        ("How many legs does a spider have?", "8"),
+        ("What color do you get by mixing red and blue?", "Purple"),
+    ],
+    "medium": [
+        ("Who wrote '1984'?", "George Orwell"),
+        ("What is the capital of Japan?", "Tokyo"),
+        ("In computing, what does 'CPU' stand for?", "Central Processing Unit"),
+    ],
+    "hard": [
+        ("What element has the chemical symbol 'W'?", "Tungsten"),
+        ("Who painted 'The Night Watch'?", "Rembrandt"),
+        ("What is the smallest prime number greater than 100?", "101"),
+    ],
+}
+
+def get_fallback_trivia(difficulty: str):
+    diff = difficulty if difficulty in FALLBACK_TRIVIA else "medium"
+    return random.choice(FALLBACK_TRIVIA[diff])
+
 def normalize_answer(text: str) -> str:
     if not text:
         return ""
     t = text.strip().lower()
-    # remove punctuation and articles; collapse whitespace
     t = re.sub(r"[\W_]+", " ", t)
     t = re.sub(r"\b(the|a|an)\b", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
@@ -652,17 +675,35 @@ def answers_match(guess: str, truth: str) -> bool:
         return False
     if g == a:
         return True
-    # containment helps with longer titles/names
     if len(g) >= 3 and (g in a or a in g):
         return True
-    # fuzzy ratio
     ratio = difflib.SequenceMatcher(None, g, a).ratio()
     return ratio >= 0.82
+
+def looks_like_guess(guess: str, answer_hint: str) -> bool:
+    """Heuristic: only treat short, plausible lines as guesses to avoid false negatives."""
+    g = normalize_answer(guess)
+    if not g:
+        return False
+    if g.startswith("!"):
+        return False
+    if len(g) < 2:
+        return False
+    # Short, guessy lines
+    if len(g.split()) <= 5 and len(g) <= 40:
+        return True
+    # Some overlap with the true answer's tokens
+    ah = normalize_answer(answer_hint)
+    gt, at = {w for w in g.split() if len(w) >= 3}, {w for w in ah.split() if len(w) >= 3}
+    if gt & at:
+        return True
+    # Fuzzy hint
+    return difflib.SequenceMatcher(None, g, ah).ratio() >= 0.5
 
 def generate_trivia_qa(topic: str, difficulty: str):
     """
     Use AI to generate a trivia Q&A.
-    Returns (question, answer) or (None, None) on error.
+    Returns (question, answer) or (fallback) if the AI slips.
     """
     try:
         topic_text = topic or "general knowledge"
@@ -689,12 +730,11 @@ def generate_trivia_qa(topic: str, difficulty: str):
         m_q = re.search(r"^Q:\s*(.+)$", txt, re.IGNORECASE | re.MULTILINE)
         m_a = re.search(r"^A:\s*(.+)$", txt, re.IGNORECASE | re.MULTILINE)
         if m_q and m_a:
-            q = m_q.group(1).strip()
-            a = m_a.group(1).strip()
-            return q, a
+            return m_q.group(1).strip(), m_a.group(1).strip()
     except Exception as e:
         print("Trivia AI error:", e)
-    return None, None
+    # fallback if AI format slips
+    return get_fallback_trivia(difficulty)
 
 def start_trivia(asked_by: str, difficulty: str, topic: str):
     q, a = generate_trivia_qa(topic, difficulty)
@@ -710,28 +750,31 @@ def start_trivia(asked_by: str, difficulty: str, topic: str):
         "asked_by": asked_by,
         "asked_ts": time.time(),
     })
-    send_message(f"🎯 Trivia ({TRIVIA_STATE['difficulty']}): {q}")
+    send_message(f"🎯 Trivia ({TRIVIA_STATE['difficulty']}): {q}  (answer in chat or use !answer <guess>)")
 
-def try_answer_trivia(user: str, text: str) -> bool:
+def try_answer_trivia(user: str, text: str, force: bool = False) -> bool:
     """
     If a trivia is active, evaluate the user's text as an answer.
-    Returns True if handled (correct/incorrect response given), else False.
+    Returns True if handled (correct/incorrect/ignored), else False.
     """
     if not TRIVIA_STATE["active"]:
         return False
-    guess = text.strip()
-    if not guess or guess.startswith("!"):
+    guess = (text or "").strip()
+    if not guess:
         return False
-    # Don't evaluate bot lines
+    # Ignore bots
     if user.lower() in { (BOT_NICK or '').lower(), "streamelements", "nightbot", "moobot" }:
         return False
+    # Only treat as a guess if it *looks like* one, unless forced via !answer.
+    if not force and not looks_like_guess(guess, TRIVIA_STATE["answer"]):
+        return False
+
     if answers_match(guess, TRIVIA_STATE["answer"]):
         send_message(f"@{user} ✅ Correct! Answer: {TRIVIA_STATE['answer']}")
         TRIVIA_STATE["active"] = False
-        return True
     else:
         send_message(f"@{user} ❌ Nope.")
-        return True
+    return True
 
 def check_trivia_timeout():
     if TRIVIA_STATE["active"] and (time.time() - TRIVIA_STATE["asked_ts"] > TRIVIA_TIMEOUT):
@@ -919,10 +962,8 @@ def listen():
 
                 # ======== FIRST: if a trivia is active, check guesses (non-commands) ========
                 if TRIVIA_STATE["active"] and not lower_msg.startswith("!"):
-                    handled = try_answer_trivia(username, message)
+                    handled = try_answer_trivia(username, message, force=False)
                     if handled:
-                        # even if wrong, we can keep processing below (no 'continue'),
-                        # but to reduce spam, we bail out on lines that were treated as guesses.
                         continue
 
                 # ------------- COMMANDS ------------- #
@@ -952,6 +993,18 @@ def listen():
                             topic = rest
                     start_trivia(username, diff, topic)
                     remember_event(username, "command", name="trivia")
+                    continue
+
+                # ======== NEW: explicit answers via !answer <guess> ========
+                if lower_msg.startswith("!answer"):
+                    if not TRIVIA_STATE["active"]:
+                        send_message("No trivia question right now. Start one with !trivia")
+                        continue
+                    parts_ans = message.split(" ", 1)
+                    if len(parts_ans) < 2 or not parts_ans[1].strip():
+                        send_message("Usage: !answer <your guess>")
+                        continue
+                    try_answer_trivia(username, parts_ans[1].strip(), force=True)
                     continue
 
                 # Timers (kept)
