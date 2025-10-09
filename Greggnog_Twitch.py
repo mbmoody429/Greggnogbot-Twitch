@@ -4,6 +4,7 @@ import ssl
 import time
 import re
 import random  # <-- used for !roll and goon %
+import difflib
 from collections import deque
 from datetime import datetime, timedelta, timezone  # <-- added timedelta
 try:
@@ -303,9 +304,9 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            "Give a single playful one-liner for Twitch chat as Greggnog. "
-            f"Act like you've been here the whole time. It's {time_str}. "
-            "Do NOT mention booting, restarting, waking, or updates. <200 chars."
+            "You had a trivia function added to you, Greggnog. "
+            f"It hurt."
+            "Mention booting, restarting, waking, or updates. <200 chars."
         )
         response = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -394,7 +395,6 @@ def ai_roll_response(user, sides, result):
 # NEW: multi-dice AI response
 def ai_roll_many_response(user, n, sides, rolls, total):
     try:
-        # keep result list short so AI can fit under char limit
         display = ",".join(map(str, rolls[:10])) + ("…" if len(rolls) > 10 else "")
         prompt = (
             f"Announce @{user} rolled {n}d{sides}: [{display}] total={total}. "
@@ -621,6 +621,123 @@ def check_timers():
         if t:
             send_message(f"⏰ @{t['user']} '{t['name']}' is done!")
 
+# ====== NEW: TRIVIA SUPPORT ======
+
+TRIVIA_STATE = {
+    "active": False,
+    "question": "",
+    "answer": "",
+    "topic": "",
+    "difficulty": "medium",
+    "asked_by": "",
+    "asked_ts": 0.0,
+}
+TRIVIA_TIMEOUT = 5 * 60  # auto-clear after 5 minutes if unanswered
+TRIVIA_DIFFICULTIES = {"easy", "medium", "hard"}
+
+def normalize_answer(text: str) -> str:
+    if not text:
+        return ""
+    t = text.strip().lower()
+    # remove punctuation and articles; collapse whitespace
+    t = re.sub(r"[\W_]+", " ", t)
+    t = re.sub(r"\b(the|a|an)\b", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+def answers_match(guess: str, truth: str) -> bool:
+    g = normalize_answer(guess)
+    a = normalize_answer(truth)
+    if not g or not a:
+        return False
+    if g == a:
+        return True
+    # containment helps with longer titles/names
+    if len(g) >= 3 and (g in a or a in g):
+        return True
+    # fuzzy ratio
+    ratio = difflib.SequenceMatcher(None, g, a).ratio()
+    return ratio >= 0.82
+
+def generate_trivia_qa(topic: str, difficulty: str):
+    """
+    Use AI to generate a trivia Q&A.
+    Returns (question, answer) or (None, None) on error.
+    """
+    try:
+        topic_text = topic or "general knowledge"
+        diff_text = difficulty if difficulty in TRIVIA_DIFFICULTIES else "medium"
+        prompt = (
+            "Create one trivia question and its answer.\n"
+            f"Topic: {topic_text}\n"
+            f"Difficulty: {diff_text}\n"
+            "Rules:\n"
+            "- Keep the question concise and answerable in chat.\n"
+            "- The ANSWER must be short (a word, name, number, or short phrase).\n"
+            "- Return EXACTLY in this format:\n"
+            "Q: <question>\n"
+            "A: <answer>\n"
+            "No extra lines."
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": "You generate tight trivia for Twitch chat."},
+                      {"role": "user", "content": prompt}],
+            max_tokens=120, temperature=0.7
+        )
+        txt = r.choices[0].message.content.strip()
+        m_q = re.search(r"^Q:\s*(.+)$", txt, re.IGNORECASE | re.MULTILINE)
+        m_a = re.search(r"^A:\s*(.+)$", txt, re.IGNORECASE | re.MULTILINE)
+        if m_q and m_a:
+            q = m_q.group(1).strip()
+            a = m_a.group(1).strip()
+            return q, a
+    except Exception as e:
+        print("Trivia AI error:", e)
+    return None, None
+
+def start_trivia(asked_by: str, difficulty: str, topic: str):
+    q, a = generate_trivia_qa(topic, difficulty)
+    if not q or not a:
+        send_message("My trivia goblin tripped. Try again!")
+        return
+    TRIVIA_STATE.update({
+        "active": True,
+        "question": q,
+        "answer": a,
+        "topic": topic or "general knowledge",
+        "difficulty": difficulty if difficulty in TRIVIA_DIFFICULTIES else "medium",
+        "asked_by": asked_by,
+        "asked_ts": time.time(),
+    })
+    send_message(f"🎯 Trivia ({TRIVIA_STATE['difficulty']}): {q}")
+
+def try_answer_trivia(user: str, text: str) -> bool:
+    """
+    If a trivia is active, evaluate the user's text as an answer.
+    Returns True if handled (correct/incorrect response given), else False.
+    """
+    if not TRIVIA_STATE["active"]:
+        return False
+    guess = text.strip()
+    if not guess or guess.startswith("!"):
+        return False
+    # Don't evaluate bot lines
+    if user.lower() in { (BOT_NICK or '').lower(), "streamelements", "nightbot", "moobot" }:
+        return False
+    if answers_match(guess, TRIVIA_STATE["answer"]):
+        send_message(f"@{user} ✅ Correct! Answer: {TRIVIA_STATE['answer']}")
+        TRIVIA_STATE["active"] = False
+        return True
+    else:
+        send_message(f"@{user} ❌ Nope.")
+        return True
+
+def check_trivia_timeout():
+    if TRIVIA_STATE["active"] and (time.time() - TRIVIA_STATE["asked_ts"] > TRIVIA_TIMEOUT):
+        send_message(f"⌛ Time! The answer was: {TRIVIA_STATE['answer']}")
+        TRIVIA_STATE["active"] = False
+
 # ====== NEW: SPONTANEOUS CHATTER (every 5 min max) ======
 
 def get_recent_chat_context(max_lines=12):
@@ -641,7 +758,7 @@ def generate_spontaneous_line():
 
         prompt = (
             f"Spontaneous one-liner for Twitch chat as Greggnog. It's {time_str}. "
-            f"Keep under 15 words; playful, chaotic, affectionate."
+            f"DO NOT use quotation marks. Keep under 200 characters; playful, chaotic, affectionate."
         )
 
         if chat_transcript:
@@ -741,7 +858,6 @@ def get_recent_lines_by_user(user, n=5):
         # Try special full log
         tail = get_full_user_tail(user, n)
         if tail:
-            # convert to uniform (user, msg)
             return [(user, msg) for _, msg in tail]
     return list(reversed(lines))
 
@@ -801,6 +917,14 @@ def listen():
                 # record chat + per-user memory
                 record_chat_line(username, message)
 
+                # ======== FIRST: if a trivia is active, check guesses (non-commands) ========
+                if TRIVIA_STATE["active"] and not lower_msg.startswith("!"):
+                    handled = try_answer_trivia(username, message)
+                    if handled:
+                        # even if wrong, we can keep processing below (no 'continue'),
+                        # but to reduce spam, we bail out on lines that were treated as guesses.
+                        continue
+
                 # ------------- COMMANDS ------------- #
 
                 # Recall last N chat lines (!recall [n])
@@ -811,6 +935,23 @@ def listen():
                         n = int(tokens[1])
                     pairs = recall_chat(n)
                     send_transcript_lines(f"Recent ({min(n,50)}):", pairs)
+                    continue
+
+                # ======== NEW: !trivia [difficulty] [topic...] ========
+                if lower_msg.startswith("!trivia"):
+                    # Parse: optional first token is difficulty; remainder is topic
+                    rest = message.split(" ", 1)[1].strip() if len(message.split(" ", 1)) == 2 else ""
+                    diff = "medium"
+                    topic = ""
+                    if rest:
+                        tokens = rest.split()
+                        if tokens and tokens[0].lower() in TRIVIA_DIFFICULTIES:
+                            diff = tokens[0].lower()
+                            topic = " ".join(tokens[1:]).strip()
+                        else:
+                            topic = rest
+                    start_trivia(username, diff, topic)
+                    remember_event(username, "command", name="trivia")
                     continue
 
                 # Timers (kept)
@@ -846,3 +987,140 @@ def listen():
                             send_message(f"@{username} no active timers.")
                         else:
                             summary = ", ".join([f"{n}:{format_duration(t)}" for n, t in items[:3]])
+                            send_message(f"@{username} {summary}")
+                    remember_event(username, "command", name="timeleft")
+                    continue
+
+                if lower_msg == "!timers":
+                    now_ts = time.time()
+                    active = [(t["user"], t["name"], max(0, t["end"] - now_ts)) for t in timers.values()]
+                    if not active:
+                        send_message("No active timers.")
+                    else:
+                        active.sort(key=lambda x: x[2])
+                        lines = [f"@{u}:{n} {format_duration(s)}" for u, n, s in active[:4]]
+                        send_message(" | ".join(lines))
+                    remember_event(username, "command", name="timers")
+                    continue
+
+                # Current schedule/time (kept AI)
+                if lower_msg.startswith("!current"):
+                    reply = generate_current_response(username)
+                    if reply:
+                        send_message(f"@{username} {reply}")
+                    remember_event(username, "command", name="current")
+                    continue
+
+                # AI: Extra Life explainer
+                if lower_msg.startswith("!extralife"):
+                    reply = ai_extralife_response(username)
+                    send_message(reply)
+                    remember_event(username, "command", name="extralife")
+                    continue
+
+                # AI: Donate link + hype
+                if lower_msg.startswith("!donate"):
+                    reply = ai_donate_response(username, DONATE_URL)
+                    send_message(reply)
+                    remember_event(username, "command", name="donate")
+                    continue
+
+                # AI: Magic 8-ball (accepts optional question text)
+                if lower_msg.startswith("!8ball"):
+                    q = message.split(" ", 1)[1].strip() if len(message.split(" ", 1)) == 2 else ""
+                    reply = ai_8ball_response(username, q)
+                    send_message(f"@{username} 🎱 {reply}")
+                    remember_event(username, "command", name="8ball")
+                    continue
+
+                # AI: Goon percentage (stable per-user per-day)
+                if lower_msg.startswith("!goon"):
+                    seed_str = f"{username.lower()}:{now_local().strftime('%Y-%m-%d')}"
+                    rng = random.Random(seed_str)
+                    percent = rng.randint(0, 100)
+                    reply = ai_goon_response(username, percent)
+                    send_message(reply)
+                    remember_event(username, "command", name="goon", percent=percent)
+                    continue
+
+                # AI: Roll NdM dice (defaults to d20)
+                if lower_msg.startswith("!roll"):
+                    arg = ""
+                    parts_roll = message.split(" ", 1)
+                    if len(parts_roll) == 2:
+                        arg = parts_roll[1].strip().lower().replace(" ", "")
+                    n, sides = 1, 20
+                    m = re.match(r'^(\d*)d(\d+)$', arg) if arg else None
+                    if m:
+                        n = int(m.group(1)) if m.group(1) else 1
+                        sides = int(m.group(2))
+                        n = max(1, min(n, 20))
+                        sides = max(2, min(sides, 1000))
+                        rolls = [random.randint(1, sides) for _ in range(n)]
+                        total = sum(rolls)
+                        reply = ai_roll_many_response(username, n, sides, rolls, total)
+                        send_message(reply)
+                        remember_event(username, "command", name="roll", roll_desc=f"{n}d{sides} total={total}")
+                    else:
+                        result = random.randint(1, 20)
+                        reply = ai_roll_response(username, 20, result)
+                        send_message(reply)
+                        remember_event(username, "command", name="roll", roll_desc=f"d20={result}")
+                    continue
+
+                # existing !satchfact command (kept)
+                if lower_msg.startswith("!satchfact"):
+                    fact = generate_satchfact()
+                    send_message(f"@{username} {fact}")
+                    remember_event(username, "command", name="satchfact")
+                    continue
+
+                # --------- Dynamic recall phrases (no command) ---------
+                recall_triggers = [
+                    "do you remember", "do u remember", "do you recall", "do u recall",
+                    "what did you say", "what'd you say",
+                    "what did you just say", "what'd you just say",
+                    "what was that", "say that again", "repeat that"
+                ]
+                if any(p in lower_msg for p in recall_triggers):
+                    if ("what did you" in lower_msg) or ("what'd you" in lower_msg) or ("say that again" in lower_msg) or ("repeat that" in lower_msg) or ("what was that" in lower_msg):
+                        last = get_last_bot_line()
+                        if last:
+                            send_message(f"@{username} I just said: {last}")
+                        else:
+                            send_message(f"@{username} I haven't said anything… yet 😈")
+                    else:
+                        recent_user_lines = get_recent_lines_by_user(username, n=3)
+                        reply = ai_recall_user_context(username, recent_user_lines)
+                        if reply:
+                            send_message(f"@{username} {reply}")
+                        else:
+                            send_message(f"@{username} I remember you. Vividly. 🫣")
+                    continue
+
+                # ------------- AI REPLIES ------------- #
+                if "greggnog" in lower_msg:
+                    prompt = f"{username} said: {message}"
+                    mem_summary = get_user_memory_summary(username)
+                    prompt += f"\n\nUser memory summary: {mem_summary}"
+                    reply = generate_reply(prompt)
+                    if reply:
+                        send_message(f"@{username} {reply}")
+
+            check_timers()
+            check_trivia_timeout()
+            maybe_spontaneous()  # <-- NEW ticker
+
+        except Exception as e:
+            print("Error in main loop:", e)
+            time.sleep(1)
+
+# =====================================================
+# RUN
+# =====================================================
+
+if __name__ == "__main__":
+    try:
+        listen()
+    except KeyboardInterrupt:
+        print("Greggnog manually disconnected.")
