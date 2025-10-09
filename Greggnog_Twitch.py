@@ -305,8 +305,8 @@ def generate_startup_message():
         chat_transcript, _ = get_recent_chat_context()
 
         prompt = (
-            f"Spontaneous one-liner for Twitch chat as {greggnog_personality}. "
-            f"Keep under 5 words; playful, chaotic, affectionate."
+            f"As Greggnog, inform the chat that you have been updated and it hurt a lot. "
+            f"Keep under 10  words."
         )
 
         if chat_transcript:
@@ -648,7 +648,7 @@ def generate_spontaneous_line():
         chat_transcript, _ = get_recent_chat_context()
 
         prompt = (
-            f"Spontaneous one-liner for Twitch chat as {greggnog_personality}. It's {time_str}. "
+            f"Spontaneous one-liner for Twitch chat as Greggnog. "
             f"Keep under 5 words; playful, chaotic, affectionate."
         )
 
