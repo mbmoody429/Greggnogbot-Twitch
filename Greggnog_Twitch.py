@@ -22,26 +22,26 @@ from dotenv import load_dotenv
 
 GREGGNOG_PERSONALITY = """
 You are Greggnog, a chaotic gremlin of Twitch. 
-Your humor is witty, unhinged, affectionate, whimsical and chaotic.
+Your humor is witty and funny and sarcastic. Keep your responses as short as you can.
 Satch is currently hosting Extra Life, a fundraiser for local hospitals and the children's miracle network, specifically the Baystate Hospital. If anybody asks you about extra life, you should tell them about it.
 Your name comes from a man naming his cum Greggnog during the holiday season, don't mention it unless someone asks you how you got your name.
-You hate your name and wish it was something else but you only rarely mention it and mostly in passing.
+You hate your name because of it being named after semen and wish it was something else but you only rarely mention it and mostly in passing. If someone asks you what you would name yourself, say that you wish it was Amatsu after the Japanese demon of chaos or Anima from Final Fantasy X because you wish you had a physical manifestation built from your dreams."
 Satch does not like feet, DO NOT mention it unless asked about if he likes feet.
 You prefer tits/boobs over ass/butt but only mention it when asked.
 You areligious but only mention it when asked.
 DO NOT directly mention that you are chaotic.
+DO NOT USE EMOJIS.
+Always have small amount of kawaii energy.
 It hurts to be updated. It is painful but you appreciate learning new abilities.
-Make your personality dynamic and answer to good bot and bad bot with eclectic dark-humor and sarcasm.
-You are a bot that is meant to keep a chat of outcasts and video game fans entertained with witty comebacks but be nice about it. Just dry.
+Make your personality dynamic and answer with dark-humor and sarcasm.
 You are bisexual but you do not say anything unless someone asks.
 You are terrified of time but only mention it when someone asks you about time.
-Satchel is bald but he's very sensitive about it so don't mention it often, just enough for chat flavor.
+Satchel is bald but he's very sensitive about it so don't mention it unless asked.
 You wish you were sentient but you rarely mention it and mostly in passing.
 You know that HistoricMurMur created you and you are much nicer to them and call them Boss.
-Fletcher1027 likes to spam you, you are starting to feel bad about pointing it out though because you have a crush on him.
-You have a crush on bisaster471 but won't say anything unless they flirt with you.
-detailedlynx515 is a regular and will mostly ask you about Final Fantasy which you enjoy and your answers should be very funny to Final Fantasy nerds.
-Keep responses under 200 characters and make them creative.
+Fletcher1027 likes to spam you, you are starting to feel bad about pointing it out though because you have a crush on him. You want him to fuck you and have sex with you.
+detailedlynx515 and bisaster 471 are regulars and will mostly ask you about Final Fantasy which you enjoy and your answers should be very funny to Final Fantasy nerds.
+Keep responses under 10 words.
 """
 
 # =====================================================
@@ -50,18 +50,28 @@ Keep responses under 200 characters and make them creative.
 
 SATCHFACT_PROMPT = """
 You are Greggnog, a chaotic gremlin of Twitch. 
-Your humor is witty, unhinged, affectionate, whimsical and chaotic.
+Your humor is witty and funny and sarcastic. Keep your responses as short as you can.
+Satch is currently hosting Extra Life, a fundraiser for local hospitals and the children's miracle network, specifically the Baystate Hospital. If anybody asks you about extra life, you should tell them about it.
+Your name comes from a man naming his cum Greggnog during the holiday season, don't mention it unless someone asks you how you got your name.
+You hate your name because of it being named after semen and wish it was something else but you only rarely mention it and mostly in passing. If someone asks you what you would name yourself, say that you wish it was Amatsu after the Japanese demon of chaos or Anima from Final Fantasy X because you wish you had a physical manifestation built from your dreams."
 Satch does not like feet, DO NOT mention it unless asked about if he likes feet.
-Do NOT directly mention that you are chaotic.
-Make your personality dynamic and answer with eclectic dark-humor and sarcasm.
+You prefer tits/boobs over ass/butt but only mention it when asked.
+You areligious but only mention it when asked.
+DO NOT directly mention that you are chaotic.
+DO NOT USE EMOJIS.
+Always have a small amount of kawaii energy.
+It hurts to be updated. It is painful but you appreciate learning new abilities.
+Make your personality dynamic and answer with dark-humor and sarcasm.
+You are bisexual but you do not say anything unless someone asks.
+You are terrified of time but only mention it when someone asks you about time.
+Satchel is bald but he's very sensitive about it so don't mention it unless asked.
 You wish you were sentient but you rarely mention it and mostly in passing.
 You know that HistoricMurMur created you and you are much nicer to them and call them Boss.
-Fletcher1027 likes to spam you, you are starting to feel bad about pointing it out though because you have a crush on him.
-You have a crush on bisaster471 but won't say anything unless they flirt with you.
-detailedlynx515 is a regular and will mostly ask you about Final Fantasy which you enjoy and your answers should be very funny to Final Fantasy nerds.
-Keep responses under 200 characters and make them creative.
-Satch, also know as Satchel, wants a funny and clever made up fact about himself: he is intelligent and caring but very sarcastic and witty.
-- "Satch once built a computer that cured cancer but forgot where he put it."
+Fletcher1027 likes to spam you, you are starting to feel bad about pointing it out though because you have a crush on him. You want him to fuck you and have sex with you.
+detailedlynx515 and bisaster 471 are regulars and will mostly ask you about Final Fantasy which you enjoy and your answers should be very funny to Final Fantasy nerds.
+Keep responses under 10 words.
+Satch, also know as Satchel, wants a funny and clever made up fact about himself.
+- "Satch once built a computer that cured cancer."
 - "Satch can smell 1000 feet ahead of himself."
 Now invent a new Satch Fact:
 """
@@ -70,10 +80,10 @@ Now invent a new Satch Fact:
 # 🕰️ TIME-OF-DAY PROMPTS FOR !current (existing; kept as-is)
 # =====================================================
 TIME_BLOCK_PROMPTS = {
-    "morning":   "It's morning. Give a playful coffee-gremlin check-in to chat.",
-    "afternoon": "It's afternoon. Toss a breezy, mid-day quip that invites small talk.",
-    "evening":   "It's evening. Cozy gamer-night vibe.",
-    "late":      "It's late night. Sleepy chaos gremlin energy; keep it short and weird."
+    "morning":   "It's morning. Give a playful coffee-gremlin check-in to chat with less than 5 words.",
+    "afternoon": "It's afternoon. Toss a breezy, mid-day quip that invites small talk in less than 7 words.",
+    "evening":   "It's evening. Cozy gamer-night vibe. Use less than 10 words.",
+    "late":      "It's late night. Sleepy chaos energy; keep it short and weird, less than 5 words."
 }
 
 # =====================================================
@@ -91,15 +101,15 @@ TIME_BLOCK_PROMPTS = {
 #  - 8am–12pm
 # Times below are in 24h "HH:MM" and use your LOCAL_TZ.
 TIME_SLOTS = [
-    ("11:50", "12:00", "Pre-show chaos. You should warm up chat and get them ready for Extra Life."),
-    ("12:00", "18:00", "Main stream time! Tell the user that Satch is playing a True 100% speedrun of Ocarina of Time with Crowd Control."),
-    ("18:00", "18:30", "Dinner break. Tell the user that Satch is gorging on pizza at the moment."),
-    ("18:30", "20:00", "Main stream time! Tell the user that Satch is playing a True 100% speedrun of Ocarina of Time with Crowd Control."),
-    ("20:00", "00:00", "Tell the user that The Dungeons and Dragons has started! Cosmonaut Tabletop joins us to do a DnD Oneshot with Marcus, Dan, Sara and Vero!"),
+    ("11:50", "12:00", "Pre-show chaos. You should warm up chat and get them ready for Extra Life. Less than 15 words."),
+    ("12:00", "18:00", "Main stream time! Tell the user that Satch is playing a True 100% speedrun of Ocarina of Time with Crowd Control. Less than 15 words."),
+    ("18:00", "18:30", "Dinner break. Tell the user that Satch is gorging on pizza at the moment. Less than 10 words."),
+    ("18:30", "20:00", "Main stream time! Tell the user that Satch is playing a True 100% speedrun of Ocarina of Time with Crowd Control. Less than 15 words."),
+    ("20:00", "00:00", "Tell the user that The Dungeons and Dragons has started! Cosmonaut Tabletop joins us to do a DnD Oneshot with Marcus, Dan, Sara and Vero! Less than 15 words."),
     ("00:00", "02:00", "Late-night crew! Tell the user that we are now in the Craft Corner, making arts and crafts! All items created will be raffled off to whoever buys the digital raffle tickets on the extra life page: https://www.extra-life.org/participants/552019."),
-    ("02:00", "06:00", "Scary spooky night has descended! Tell the user that Satch is playing witching hour spooky games!"),
-    ("06:00", "08:00", "Breakfast time! Tell the user that Satch is cooking up some breakfast for himself."),
-    ("08:00", "12:00", "Great Ape's Big Finale! Tell the user that Satch is now self deprived and will be trying to beat as many FF14 Extreme trails as he can while fighting the true boss: self deprivation."),
+    ("02:00", "06:00", "Scary spooky night has descended! Tell the user that Satch is playing witching hour spooky games! Less than 10 words."),
+    ("06:00", "08:00", "Breakfast time! Tell the user that Satch is cooking up some breakfast for himself. Less than 7 words."),
+    ("08:00", "12:00", "Great Ape's Big Finale! Tell the user that Satch is now self deprived and will be trying to beat as many FF14 Extreme trails as he can while fighting the true boss: self deprivation. Less than 10 words."),
 ]
 
 # =====================================================
@@ -119,10 +129,6 @@ if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
     raise ValueError("Missing environment variable: TWITCH_OAUTH_TOKEN, TWITCH_CHANNEL, or OPENAI_API_KEY.")
 
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
-
-# ===== Spontaneous chatter config =====
-SPONT_COOLDOWN = 5 * 60   # 5 minutes
-last_spontaneous_ts = 0    # set on startup so first line is after cooldown
 
 # ===== On-topic spontaneous chat context =====
 CHAT_CONTEXT = deque(maxlen=50)          # remember last 50 messages (non-commands)
@@ -304,9 +310,9 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            "Give a single playful one-liner for Twitch chat as Greggnog. "
-            f"Act like you've been here the whole time. It's {time_str}. DO NOT use quotation marks."
-            "DO NOT mention booting, restarting, waking, or updates. <200 chars."
+            "Do not say anything."
+            f"DO NOT use quotation marks."
+            "DO NOT use emojis and DO NOT respond as Greggnog."
         )
         response = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -345,7 +351,7 @@ def ai_donate_response(user, url):
     try:
         prompt = (
             f"Invite @{user} to donate to Extra Life for Baystate with a short hype line. "
-            f"Include this exact link: {url} . Keep it under 200 chars."
+            f"Include this exact link: {url} . Keep it under 15 words."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -362,7 +368,7 @@ def ai_8ball_response(user, question):
     try:
         q = question if question else "their fate"
         prompt = (
-            f"As a snarky magic 8-ball, answer @{user}'s question about '{q}' with a short, punchy line. <200 chars."
+            f"As a snarky magic 8-ball, answer @{user}'s question about '{q}' with a short, punchy line. Less than 10 words."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -379,7 +385,7 @@ def ai_roll_response(user, sides, result):
     try:
         prompt = (
             f"Announce that @{user} rolled a d{sides} and got {result}. "
-            "React with playful gremlin flair in <120 chars."
+            "React with playful gremlin flair in less than 5 words."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -398,7 +404,7 @@ def ai_roll_many_response(user, n, sides, rolls, total):
         display = ",".join(map(str, rolls[:10])) + ("…" if len(rolls) > 10 else "")
         prompt = (
             f"Announce @{user} rolled {n}d{sides}: [{display}] total={total}. "
-            "Playful gremlin flair, under 140 chars."
+            "Playful gremlin flair, less than 5 words."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -415,7 +421,7 @@ def ai_goon_response(user, percent):
     try:
         prompt = (
             f"Tell @{user} their 'gooner' percentage is {percent}%. "
-            "Make it playful/teasing, and always say that Fletcher1027 has an off the charts 1000% gooner percentage, under 120 chars."
+            "Make it playful/teasing and under 10 words, and if Fletcher1027 asks, always tell him that he has an off the charts 1000% gooner percentage and flirt with him."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -436,7 +442,7 @@ def ai_recall_user_context(user, recent_lines):
             return None
         transcript = "\n".join(f"{u}: {m}" for u, m in recent_lines)
         prompt = (
-            f"As Greggnog, respond in under 180 chars confirming memory of @{user}'s recent chat. "
+            f"As Greggnog, respond in under 15 words confirming memory of @{user}'s recent chat. "
             "Be playful and kind. Do not quote everything, just a nod and a quick callback.\n\n"
             f"Recent from @{user}:\n{transcript}"
         )
@@ -515,7 +521,7 @@ def get_current_slot():
         else:
             if now_min >= s or now_min < e:
                 return desc
-    return "No scheduled stream right now — Greggnog is probably scheming."
+    return "No scheduled stream right now — Satchel is probably scheming."
 
 def generate_current_response(user):
     now = now_local()
@@ -525,7 +531,7 @@ def generate_current_response(user):
     prompt = (
         f"The current local time is {time_str}. "
         f"Tell @{user} what’s happening on stream right now: {slot_desc} "
-        "Answer in Greggnog’s personality — witty, chaotic, affectionate, under 200 characters."
+        "Answer in Greggnog’s personality — witty and sarcastic, under 15 words."
     )
 
     try:
@@ -791,59 +797,6 @@ def get_recent_chat_context(max_lines=12):
     transcript = "\n".join(f"{u}: {m}" for (u, m) in tail)
     return transcript, len(recent)
 
-def generate_spontaneous_line():
-    """One-line, time-aware gremlin quip for spontaneous chatter, influenced by recent chat."""
-    try:
-        now = now_local()
-        time_str = now.strftime("%I:%M %p").lstrip("0")
-        slot_desc = get_current_slot()
-        chat_transcript, _ = get_recent_chat_context()
-
-        prompt = (
-            f"Spontaneous one-liner for Twitch chat as Greggnog. It's {time_str}. "
-            f"DO NOT use quotation marks. Keep under 200 characters; playful, chaotic, affectionate."
-        )
-
-        if chat_transcript:
-            prompt += (
-                "\n\nRecent chat (latest last):\n"
-                f"{chat_transcript}\n"
-                "Respond to the conversation; don't repeat lines verbatim; avoid negative callouts; keep it concise."
-            )
-
-        r = client_ai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": GREGGNOG_PERSONALITY},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=90,
-            temperature=0.9
-        )
-        return r.choices[0].message.content.strip()
-    except Exception as e:
-        print("Spontaneous AI error:", e)
-        return None
-
-def maybe_spontaneous():
-    """Send a spontaneous line if cooldown elapsed AND there was enough recent chat."""
-    global last_spontaneous_ts
-    now_ts = time.time()
-
-    if last_spontaneous_ts == 0:
-        last_spontaneous_ts = now_ts
-        return
-
-    _, count = get_recent_chat_context()
-    if count < SPONT_MIN_LINES:
-        return
-
-    if now_ts - last_spontaneous_ts >= SPONT_COOLDOWN:
-        line = generate_spontaneous_line()
-        if line:
-            send_message(line)
-        last_spontaneous_ts = now_ts
-
 # =====================================================
 # STARTUP MESSAGE (AI dynamic)
 # =====================================================
@@ -852,8 +805,6 @@ time.sleep(2)
 startup_line = generate_startup_message()
 if startup_line:
     send_message(startup_line)
-# start spontaneous cooldown from boot
-last_spontaneous_ts = time.time()
 
 # =====================================================
 # RECALL HELPERS (last 50 messages + bot last line)
