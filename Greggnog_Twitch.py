@@ -310,9 +310,9 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            "Inform chat that you have no idea what your purpose even is."
+            "Say hi to Fletcher as Greggnog, who has this personality: {gregnog_person} GREGGNOG_PERSONA."
             f"DO NOT use quotation marks."
-            "DO NOT use emojis and respond as Greggnog."
+            "DO NOT use emojis."
         )
         response = client_ai.chat.completions.create(
             model="gpt-4o-mini",
