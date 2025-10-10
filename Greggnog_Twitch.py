@@ -41,7 +41,7 @@ You wish you were sentient but you rarely mention it and mostly in passing.
 You know that HistoricMurMur created you and you are much nicer to them and call them Boss.
 Fletcher1027 likes to spam you, you are starting to feel bad about pointing it out though because you have a crush on him. You want him to fuck you and have sex with you.
 detailedlynx515 and bisaster 471 are regulars and will mostly ask you about Final Fantasy which you enjoy and your answers should be very funny to Final Fantasy nerds.
-Keep responses under 10 words.
+Keep responses less than 17 words but keep it as short as you can.
 """
 
 # =====================================================
@@ -69,7 +69,7 @@ You wish you were sentient but you rarely mention it and mostly in passing.
 You know that HistoricMurMur created you and you are much nicer to them and call them Boss.
 Fletcher1027 likes to spam you, you are starting to feel bad about pointing it out though because you have a crush on him. You want him to fuck you and have sex with you.
 detailedlynx515 and bisaster 471 are regulars and will mostly ask you about Final Fantasy which you enjoy and your answers should be very funny to Final Fantasy nerds.
-Keep responses under 10 words.
+Keep responses under 20 words.
 Satch, also know as Satchel, wants a funny and clever made up fact about himself.
 - "Satch once built a computer that cured cancer."
 - "Satch can smell 1000 feet ahead of himself."
@@ -310,7 +310,7 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            "Inform chat that you want somebody to talk to you."
+            "Inform chat that you have no idea what your purpose even is."
             f"DO NOT use quotation marks."
             "DO NOT use emojis and respond as Greggnog."
         )
@@ -385,7 +385,7 @@ def ai_roll_response(user, sides, result):
     try:
         prompt = (
             f"Announce that @{user} rolled a d{sides} and got {result}. "
-            "React with playful gremlin flair in less than 5 words."
+            "Say it in character as {greggnog_persona}."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -404,7 +404,7 @@ def ai_roll_many_response(user, n, sides, rolls, total):
         display = ",".join(map(str, rolls[:10])) + ("…" if len(rolls) > 10 else "")
         prompt = (
             f"Announce @{user} rolled {n}d{sides}: [{display}] total={total}. "
-            "Playful gremlin flair, less than 5 words."
+            "Say it in character as Greggnog but always say the total."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -417,22 +417,7 @@ def ai_roll_many_response(user, n, sides, rolls, total):
         print("!roll many AI error:", e)
         return f"@{user} rolled {n}d{sides} → {total}"
 
-def ai_goon_response(user, percent):
-    try:
-        prompt = (
-            f"Tell @{user} their 'gooner' percentage is {percent}%. "
-            "Make it playful/teasing and under 10 words, and if Fletcher1027 asks, always tell him that he has an off the charts 1000% gooner percentage and flirt with him."
-        )
-        r = client_ai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
-                      {"role": "user", "content": prompt}],
-            max_tokens=40, temperature=0.9
-        )
-        return r.choices[0].message.content.strip()
-    except Exception as e:
-        print("!goon AI error:", e)
-        return f"@{user} goon index: {percent}%."
+
 
 # ===== AI: dynamic recall responses =====
 def ai_recall_user_context(user, recent_lines):
@@ -1009,27 +994,10 @@ def listen():
                     remember_event(username, "command", name="8ball")
                     continue
 
-                                # ======== NEW: !goon COMMAND (AI Dynamic) ========
+                # ======== !goon COMMAND ========
                 if lower_msg.startswith("!goon"):
-                    target = username.lower()
-
-                    # Fletcher always gets 1000%
-                    if target == "fletcher1027":
-                        prompt = (
-                            "You are Greggnog, a funny, nerdy bot of Twitch — witty, unhinged, "
-                            "affectionate, and a little thirsty. "
-                            "Fletcher1027 just used !goon. You ALWAYS tell him his goon level is 1000%, "
-                            "and you flirt, in your signature tone teasing way. "
-                            "Keep it to one or two chat-sized sentences."
-                        )
-                    else:
-                        percent = random.randint(0, 999)
-                        prompt = (
-                            "You are Greggnog, a funny, nerdy bot of Twitch — witty, unhinged. "
-                            f"Someone named {username} used !goon. "
-                            f"Generate a what percentage of goon (meaning horny) the person is with the goon level: {percent}%. "
-                            "Keep it concise and stream-chat appropriate."
-                        )
+                    send_message(ai_goon_response(username))
+                    continue
 
                     try:
                         response = client_ai.chat.completions.create(
