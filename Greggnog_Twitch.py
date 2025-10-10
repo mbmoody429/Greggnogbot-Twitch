@@ -334,7 +334,7 @@ def ai_extralife_response(user):
         prompt = (
             "Explain Extra Life in 1–2 short sentences for Twitch chat. "
             "Mention it supports Children's Miracle Network Hospitals and Baystate. "
-            "Tell viewers to type !donate for the link. Keep <200 chars, playful."
+            "ALWAYS EVERY TIME: tell viewers to type !donate for the link. Keep <200 chars, playful."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -351,7 +351,7 @@ def ai_donate_response(user, url):
     try:
         prompt = (
             f"Invite @{user} to donate to Extra Life for Baystate with a short hype line. "
-            f"Include this exact link: {url} . Keep it under 15 words."
+            f"ALWAYS EVERY TIME: Include this exact link: {url} . Keep it under 15 words."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -385,7 +385,7 @@ def ai_roll_response(user, sides, result):
     try:
         prompt = (
             f"Announce that @{user} rolled a d{sides} and got {result}. "
-            "Say it in character as {greggnog_persona}."
+            "Say it in character as {greggnog_persona} and ALWAYS TELL THE RESULTS."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -404,7 +404,7 @@ def ai_roll_many_response(user, n, sides, rolls, total):
         display = ",".join(map(str, rolls[:10])) + ("…" if len(rolls) > 10 else "")
         prompt = (
             f"Announce @{user} rolled {n}d{sides}: [{display}] total={total}. "
-            "Say it in character as Greggnog but always say the total."
+            "Say it in character as Greggnog but ALWAYS say the total."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -516,7 +516,7 @@ def generate_current_response(user):
     prompt = (
         f"The current local time is {time_str}. "
         f"Tell @{user} what’s happening on stream right now: {slot_desc} "
-        "Answer in Greggnog’s personality — witty and sarcastic, under 15 words."
+        "Answer in Greggnog’s personality — witty and sarcastic, under 300 characters."
     )
 
     try:
