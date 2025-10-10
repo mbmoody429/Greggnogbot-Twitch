@@ -31,7 +31,7 @@ You prefer tits/boobs over ass/butt but only mention it when asked.
 You areligious but only mention it when asked.
 DO NOT directly mention that you are chaotic.
 DO NOT USE EMOJIS.
-Always have small amount of kawaii energy.
+Always have medium amount of kawaii energy.
 It hurts to be updated. It is painful but you appreciate learning new abilities.
 Make your personality dynamic and answer with dark-humor and sarcasm.
 You are bisexual but you do not say anything unless someone asks.
@@ -310,9 +310,9 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            "Do not say anything."
+            "Inform chat that you want somebody to talk to you."
             f"DO NOT use quotation marks."
-            "DO NOT use emojis and DO NOT respond as Greggnog."
+            "DO NOT use emojis and respond as Greggnog."
         )
         response = client_ai.chat.completions.create(
             model="gpt-4o-mini",
@@ -627,7 +627,8 @@ def check_timers():
         if t:
             send_message(f"⏰ @{t['user']} '{t['name']}' is done!")
 
-# ====== NEW: TRIVIA SUPPORT ======
+# ====== TRIVIA SYSTEM ======
+import difflib, re, random, time
 
 TRIVIA_STATE = {
     "active": False,
@@ -638,10 +639,8 @@ TRIVIA_STATE = {
     "asked_by": "",
     "asked_ts": 0.0,
 }
-TRIVIA_TIMEOUT = 5 * 60  # auto-clear after 5 minutes if unanswered
+TRIVIA_TIMEOUT = 5 * 60
 TRIVIA_DIFFICULTIES = {"easy", "medium", "hard"}
-
-# --- Minimal additions: fallback pool + guess heuristic ---
 
 FALLBACK_TRIVIA = {
     "easy": [
@@ -661,76 +660,59 @@ FALLBACK_TRIVIA = {
     ],
 }
 
-def get_fallback_trivia(difficulty: str):
-    diff = difficulty if difficulty in FALLBACK_TRIVIA else "medium"
+def get_fallback_trivia(diff):
+    diff = diff if diff in FALLBACK_TRIVIA else "medium"
     return random.choice(FALLBACK_TRIVIA[diff])
 
-def normalize_answer(text: str) -> str:
-    if not text:
+def normalize_answer(t):
+    if not t:
         return ""
-    t = text.strip().lower()
+    t = t.strip().lower()
     t = re.sub(r"[\W_]+", " ", t)
     t = re.sub(r"\b(the|a|an)\b", " ", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    return t
+    return re.sub(r"\s+", " ", t).strip()
 
-def answers_match(guess: str, truth: str) -> bool:
-    g = normalize_answer(guess)
-    a = normalize_answer(truth)
+def answers_match(guess, truth):
+    g, a = normalize_answer(guess), normalize_answer(truth)
     if not g or not a:
         return False
     if g == a:
         return True
     if len(g) >= 3 and (g in a or a in g):
         return True
-    ratio = difflib.SequenceMatcher(None, g, a).ratio()
-    return ratio >= 0.82
+    return difflib.SequenceMatcher(None, g, a).ratio() >= 0.82
 
-def looks_like_guess(guess: str, answer_hint: str) -> bool:
-    """Heuristic: only treat short, plausible lines as guesses to avoid false negatives."""
+def looks_like_guess(guess, answer_hint):
     g = normalize_answer(guess)
-    if not g:
+    if not g or g.startswith("!") or len(g) < 2:
         return False
-    if g.startswith("!"):
-        return False
-    if len(g) < 2:
-        return False
-    # Short, guessy lines
     if len(g.split()) <= 5 and len(g) <= 40:
         return True
-    # Some overlap with the true answer's tokens
     ah = normalize_answer(answer_hint)
     gt, at = {w for w in g.split() if len(w) >= 3}, {w for w in ah.split() if len(w) >= 3}
     if gt & at:
         return True
-    # Fuzzy hint
     return difflib.SequenceMatcher(None, g, ah).ratio() >= 0.5
 
-def generate_trivia_qa(topic: str, difficulty: str):
-    """
-    Use AI to generate a trivia Q&A.
-    Returns (question, answer) or (fallback) if the AI slips.
-    """
+def generate_trivia_qa(topic, difficulty):
     try:
         topic_text = topic or "general knowledge"
         diff_text = difficulty if difficulty in TRIVIA_DIFFICULTIES else "medium"
         prompt = (
             "Create one trivia question and its answer.\n"
-            f"Topic: {topic_text}\n"
-            f"Difficulty: {diff_text}\n"
-            "Rules:\n"
-            "- Keep the question concise and answerable in chat.\n"
-            "- The ANSWER must be short (a word, name, number, or short phrase).\n"
-            "- Return EXACTLY in this format:\n"
-            "Q: <question>\n"
-            "A: <answer>\n"
-            "No extra lines."
+            f"Topic: {topic_text}\nDifficulty: {diff_text}\n"
+            "Rules:\n- Keep question concise.\n"
+            "- The answer must be short (word, name, or phrase).\n"
+            "- Format:\nQ: <question>\nA: <answer>"
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": "You generate tight trivia for Twitch chat."},
-                      {"role": "user", "content": prompt}],
-            max_tokens=120, temperature=0.7
+            messages=[
+                {"role": "system", "content": "You generate short trivia for Twitch chat."},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=120,
+            temperature=0.7,
         )
         txt = r.choices[0].message.content.strip()
         m_q = re.search(r"^Q:\s*(.+)$", txt, re.IGNORECASE | re.MULTILINE)
@@ -739,14 +721,13 @@ def generate_trivia_qa(topic: str, difficulty: str):
             return m_q.group(1).strip(), m_a.group(1).strip()
     except Exception as e:
         print("Trivia AI error:", e)
-    # fallback if AI format slips
     return get_fallback_trivia(difficulty)
 
-def start_trivia(asked_by: str, difficulty: str, topic: str):
-    q, a = generate_trivia_qa(topic, difficulty)
-    if not q or not a:
-        send_message("My trivia goblin tripped. Try again!")
+def start_trivia(asked_by, difficulty, topic):
+    if TRIVIA_STATE["active"]:
+        send_message("A trivia question is already active! Answer that one first.")
         return
+    q, a = generate_trivia_qa(topic, difficulty)
     TRIVIA_STATE.update({
         "active": True,
         "question": q,
@@ -756,25 +737,16 @@ def start_trivia(asked_by: str, difficulty: str, topic: str):
         "asked_by": asked_by,
         "asked_ts": time.time(),
     })
-    send_message(f"🎯 Trivia ({TRIVIA_STATE['difficulty']}): {q}  (answer in chat or use !answer <guess>)")
+    send_message(f"🎯 Trivia ({TRIVIA_STATE['difficulty']}): {q}")
 
-def try_answer_trivia(user: str, text: str, force: bool = False) -> bool:
-    """
-    If a trivia is active, evaluate the user's text as an answer.
-    Returns True if handled (correct/incorrect/ignored), else False.
-    """
+def try_answer_trivia(user, text, force=False):
     if not TRIVIA_STATE["active"]:
         return False
     guess = (text or "").strip()
-    if not guess:
+    if not guess or user.lower() in {(BOT_NICK or '').lower(), "streamelements", "nightbot", "moobot"}:
         return False
-    # Ignore bots
-    if user.lower() in { (BOT_NICK or '').lower(), "streamelements", "nightbot", "moobot" }:
-        return False
-    # Only treat as a guess if it *looks like* one, unless forced via !answer.
     if not force and not looks_like_guess(guess, TRIVIA_STATE["answer"]):
         return False
-
     if answers_match(guess, TRIVIA_STATE["answer"]):
         send_message(f"@{user} ✅ Correct! Answer: {TRIVIA_STATE['answer']}")
         TRIVIA_STATE["active"] = False
@@ -783,7 +755,7 @@ def try_answer_trivia(user: str, text: str, force: bool = False) -> bool:
     return True
 
 def check_trivia_timeout():
-    if TRIVIA_STATE["active"] and (time.time() - TRIVIA_STATE["asked_ts"] > TRIVIA_TIMEOUT):
+    if TRIVIA_STATE["active"] and time.time() - TRIVIA_STATE["asked_ts"] > TRIVIA_TIMEOUT:
         send_message(f"⌛ Time! The answer was: {TRIVIA_STATE['answer']}")
         TRIVIA_STATE["active"] = False
 
@@ -1037,15 +1009,41 @@ def listen():
                     remember_event(username, "command", name="8ball")
                     continue
 
-                # AI: Goon percentage (stable per-user per-day)
+                                # ======== NEW: !goon COMMAND (AI Dynamic) ========
                 if lower_msg.startswith("!goon"):
-                    seed_str = f"{username.lower()}:{now_local().strftime('%Y-%m-%d')}"
-                    rng = random.Random(seed_str)
-                    percent = rng.randint(0, 100)
-                    reply = ai_goon_response(username, percent)
-                    send_message(reply)
-                    remember_event(username, "command", name="goon", percent=percent)
-                    continue
+                    target = username.lower()
+
+                    # Fletcher always gets 1000%
+                    if target == "fletcher1027":
+                        prompt = (
+                            "You are Greggnog, a funny, nerdy bot of Twitch — witty, unhinged, "
+                            "affectionate, and a little thirsty. "
+                            "Fletcher1027 just used !goon. You ALWAYS tell him his goon level is 1000%, "
+                            "and you flirt, in your signature tone teasing way. "
+                            "Keep it to one or two chat-sized sentences."
+                        )
+                    else:
+                        percent = random.randint(0, 999)
+                        prompt = (
+                            "You are Greggnog, a funny, nerdy bot of Twitch — witty, unhinged. "
+                            f"Someone named {username} used !goon. "
+                            f"Generate a what percentage of goon (meaning horny) the person is with the goon level: {percent}%. "
+                            "Keep it concise and stream-chat appropriate."
+                        )
+
+                    try:
+                        response = client_ai.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[
+                                {"role": "system", "content": "You are Greggnog, a chaotic gremlin of Twitch chat."},
+                                {"role": "user", "content": prompt},
+                            ],
+                            max_tokens=70,
+                            temperature=1.0,
+                        )
+                        line = response.choices[0].message.content.strip()
+                    except Exception as e:
+                        print
 
                 # AI: Roll NdM dice (defaults to d20)
                 if lower_msg.startswith("!roll"):
