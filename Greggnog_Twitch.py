@@ -109,7 +109,7 @@ TIME_SLOTS = [
     ("00:00", "02:00", "Late-night crew! Tell the user that we are now in the Craft Corner, making arts and crafts! All items created will be raffled off to whoever buys the digital raffle tickets on the extra life page: https://www.extra-life.org/participants/552019."),
     ("02:00", "06:00", "Scary spooky night has descended! Tell the user that Satch is playing witching hour spooky games! Less than 10 words."),
     ("06:00", "08:00", "Breakfast time! Tell the user that Satch is cooking up some breakfast for himself. Less than 7 words."),
-    ("08:00", "12:00", "Great Ape's Big Finale! Tell the user that Satch is now self deprived and will be trying to beat as many FF14 Extreme trails as he can while fighting the true boss: self deprivation. Less than 10 words."),
+    ("08:00", "11:50", "Great Ape's Big Finale! Tell the user that Satch is now self deprived and will be trying to beat as many FF14 Extreme trails as he can while fighting the true boss: self deprivation. Less than 10 words."),
 ]
 
 # =====================================================
@@ -310,7 +310,7 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            "Say hi to Fletcher as Greggnog, who has this personality: {gregnog_person} GREGGNOG_PERSONA."
+            "Say hi to chat as {greggnog_persona} GREGGNOG_PERSONA."
             f"DO NOT use quotation marks."
             "DO NOT use emojis."
         )
@@ -427,7 +427,7 @@ def ai_recall_user_context(user, recent_lines):
             return None
         transcript = "\n".join(f"{u}: {m}" for u, m in recent_lines)
         prompt = (
-            f"As Greggnog, respond in under 15 words confirming memory of @{user}'s recent chat. "
+            f"As Greggnog, respond in under 20 words confirming memory of @{user}'s recent chat. "
             "Be playful and kind. Do not quote everything, just a nod and a quick callback.\n\n"
             f"Recent from @{user}:\n{transcript}"
         )
