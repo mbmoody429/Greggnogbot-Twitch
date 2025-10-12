@@ -403,9 +403,26 @@ irc.send(f"JOIN #{CHANNEL}\r\n".encode("utf-8"))
 
 print(f"{BOT_NICK} connected to #{CHANNEL}!")
 
-def send_message(channel, message):
+def send_message(*args):
+    """
+    Compatible send_message() that accepts:
+      send_message(message)
+      send_message(channel, message)
+    """
+    if len(args) == 1:
+        channel = CHANNEL
+        message = args[0]
+    elif len(args) == 2:
+        channel, message = args
+    else:
+        print("send_message() called incorrectly:", args)
+        return
+
     msg = f"PRIVMSG #{channel} :{message}\r\n"
-    irc.send(msg.encode("utf-8"))
+    try:
+        irc.send(msg.encode("utf-8"))
+    except Exception as e:
+        print("IRC send failed:", e)
 
 # =====================================================
 # OPENAI RESPONSE HANDLERS
