@@ -135,26 +135,43 @@ if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
 
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
 
-# === 🎁 EXTRA LIFE DONATION TRACKER (Railway-safe FINAL) ===
-import os, json, threading, time
-import requests
+# === 🎁 FINAL EXTRA LIFE PATCH (one file, fully self-contained) ===
+import os, json, threading, time, requests
 from flask import Flask, jsonify, render_template_string, make_response
 
-# ------------------------------------------------------------------
-# CONFIGURATION
-# ------------------------------------------------------------------
+# ------------------------------------------------------------
+# CONFIG
+# ------------------------------------------------------------
 EXTRA_LIFE_PARTICIPANT_ID = os.getenv("EXTRA_LIFE_PARTICIPANT_ID", "").strip() or "552019"
-if not EXTRA_LIFE_PARTICIPANT_ID:
-    print("⚠️  EXTRA_LIFE_PARTICIPANT_ID is not set in Railway Variables.")
+EXTRA_LIFE_URL = f"https://extra-life.donordrive.com/api/participants/{EXTRA_LIFE_PARTICIPANT_ID}"
+EXTRA_LIFE_DONATIONS = f"{EXTRA_LIFE_URL}/donations"
+SEEN_FILE = "seen_donations.txt"
 
-EXTRA_LIFE_URL = f"https://extra-life.donordrive.com/api/participants/552019"
-EXTRA_LIFE_DONATIONS = f"https://extra-life.donordrive.com/api/participants/552019/donations"
+# ------------------------------------------------------------
+# SEEN ID MEMORY (simple text file)
+# ------------------------------------------------------------
+def load_seen_ids():
+    ids = set()
+    try:
+        with open(SEEN_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                ids.add(line.strip())
+    except FileNotFoundError:
+        pass
+    return ids
 
-donation_state = {"total": 0.0, "seen_ids": set(), "last_err": None}
+def save_seen_id(did):
+    try:
+        with open(SEEN_FILE, "a", encoding="utf-8") as f:
+            f.write(did + "\n")
+    except Exception as e:
+        print("⚠️ Could not save seen ID:", e)
 
-# ------------------------------------------------------------------
-# POLLER THREAD
-# ------------------------------------------------------------------
+donation_state = {"total": 0.0, "seen_ids": load_seen_ids(), "last_err": None}
+
+# ------------------------------------------------------------
+# MAIN POLLER
+# ------------------------------------------------------------
 def poll_extra_life():
     session = requests.Session()
     headers = {
@@ -163,42 +180,39 @@ def poll_extra_life():
         "Pragma": "no-cache",
         "User-Agent": "Greggnog/1.0",
     }
-
     while True:
         try:
-            # Fetch current total
+            # --- Get totals ---
             r = session.get(EXTRA_LIFE_URL, headers=headers, timeout=10)
-            r.raise_for_status()
-            pdata = r.json()
+            pdata = r.json() if r.ok else {}
             total = float(pdata.get("sumDonations", 0.0))
 
-            # Fetch latest donations
+            # --- Get recent donations ---
             d = session.get(EXTRA_LIFE_DONATIONS, headers=headers, timeout=10)
-            d.raise_for_status()
-            donations = d.json() if isinstance(d.json(), list) else []
+            donations = d.json() if d.ok and isinstance(d.json(), list) else []
 
-            # Find new donations
+            # --- Check for new donations ---
             new_items = []
             for x in donations:
-                did = str(x.get("donationID"))
+                did = str(x.get("donationID", "")).strip()
                 if did and did not in donation_state["seen_ids"]:
                     donation_state["seen_ids"].add(did)
+                    save_seen_id(did)
                     new_items.append(x)
 
-            for x in reversed(new_items):  # announce oldest-first
+            for x in reversed(new_items):  # announce oldest first
                 donor = x.get("displayName") or "Anonymous"
-
-                # --- Optional amount handling ---
                 raw_amount = x.get("amount")
+                message = (x.get("message") or "").strip()
+
+                # Optional amount
                 amount_text = ""
                 if raw_amount is not None:
                     try:
-                        amount = float(raw_amount)
-                        amount_text = f" ${amount:.2f}"
+                        amount_text = f" ${float(raw_amount):.2f}"
                     except Exception:
-                        amount_text = ""
+                        pass
 
-                message = (x.get("message") or "").strip()
                 if message:
                     chatmsg = f"🎉 THANK YOU {donor}{amount_text}! 💖 “{message}”"
                 else:
@@ -219,9 +233,9 @@ def poll_extra_life():
 
         time.sleep(15)
 
-# ------------------------------------------------------------------
+# ------------------------------------------------------------
 # OVERLAY SERVER
-# ------------------------------------------------------------------
+# ------------------------------------------------------------
 overlay = Flask("greggnog_overlay")
 
 @overlay.after_request
@@ -229,6 +243,10 @@ def _nocache(resp):
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
     return resp
+
+@overlay.route("/")
+def home():
+    return "<h3>👋 Greggnog Extra Life overlay is running!</h3><p>Visit <a href='/overlay'>/overlay</a> for the live counter.</p>"
 
 @overlay.route("/total")
 def total_json():
@@ -247,7 +265,7 @@ def overlay_page():
                font-size: 40px; text-align: center;
                text-shadow: 2px 2px 5px #000; margin:0; }
         #counter { padding: 18px 28px; border-radius: 20px;
-                   background-color: #ADD8E6; display:inline-block; }
+                   background-color: rgba(255,187,194,0.5); display:inline-block; }
         .wrap { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
       </style>
     </head>
@@ -276,7 +294,7 @@ def run_overlay():
 def start_extra_life_services():
     threading.Thread(target=poll_extra_life, daemon=True).start()
     threading.Thread(target=run_overlay, daemon=True).start()
-    print("✅ Extra Life overlay live → /overlay | JSON → /total")
+    print("✅ Extra Life overlay live → /overlay  | JSON → /total")
 # === END PATCH ===
 
 # ===== On-topic spontaneous chat context =====
