@@ -124,6 +124,7 @@ TOKEN = os.getenv("TWITCH_OAUTH_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LOCAL_TZ = os.getenv("LOCAL_TZ", None)
 TZINFO = ZoneInfo(LOCAL_TZ) if (LOCAL_TZ and ZoneInfo) else None
+maybe_spontaneous = false
 
 
 if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
@@ -1192,7 +1193,6 @@ def listen():
 
             check_timers()
             check_trivia_timeout()
-            maybe_spontaneous()  # <-- NEW ticker
 
         except Exception as e:
             print("Error in main loop:", e)
