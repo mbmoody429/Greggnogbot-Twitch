@@ -135,26 +135,26 @@ if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
 
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
 
-# === 🎁 EXTRA LIFE DONATION TRACKER (Railway-safe) ===
+# === 🎁 EXTRA LIFE DONATION TRACKER (Railway-safe FINAL) ===
 import os, json, threading, time
 import requests
 from flask import Flask, jsonify, render_template_string, make_response
 
-# Read Participant ID from env (don’t hardcode for prod)
-EXTRA_LIFE_PARTICIPANT_ID = os.getenv("EXTRA_LIFE_PARTICIPANT_ID", "").strip()
+# ------------------------------------------------------------------
+# CONFIGURATION
+# ------------------------------------------------------------------
+EXTRA_LIFE_PARTICIPANT_ID = os.getenv("EXTRA_LIFE_PARTICIPANT_ID", "").strip() or "552019"
 if not EXTRA_LIFE_PARTICIPANT_ID:
-    print("⚠️  EXTRA_LIFE_PARTICIPANT_ID is not set. Set it in Railway Variables.")
-EXTRA_LIFE_URL = f"https://extra-life.donordrive.com/api/participants/552019/donations"
+    print("⚠️  EXTRA_LIFE_PARTICIPANT_ID is not set in Railway Variables.")
+
+EXTRA_LIFE_URL = f"https://extra-life.donordrive.com/api/participants/552019"
 EXTRA_LIFE_DONATIONS = f"https://extra-life.donordrive.com/api/participants/552019/donations"
 
-# Shared in-memory state (safe on Railway dyno)
-donation_state = {
-    "total": 0.0,
-    "seen_ids": set(),   # donationIDs we’ve announced
-    "last_err": None,
-}
+donation_state = {"total": 0.0, "seen_ids": set(), "last_err": None}
 
-# --- Poller: fetch total + new donations ---
+# ------------------------------------------------------------------
+# POLLER THREAD
+# ------------------------------------------------------------------
 def poll_extra_life():
     session = requests.Session()
     headers = {
@@ -163,42 +163,49 @@ def poll_extra_life():
         "Pragma": "no-cache",
         "User-Agent": "Greggnog/1.0",
     }
+
     while True:
         try:
-            if not EXTRA_LIFE_PARTICIPANT_ID:
-                time.sleep(15)
-                continue
-
-            # total
+            # Fetch current total
             r = session.get(EXTRA_LIFE_URL, headers=headers, timeout=10)
             r.raise_for_status()
             pdata = r.json()
             total = float(pdata.get("sumDonations", 0.0))
 
-            # donations
+            # Fetch latest donations
             d = session.get(EXTRA_LIFE_DONATIONS, headers=headers, timeout=10)
             d.raise_for_status()
             donations = d.json() if isinstance(d.json(), list) else []
 
-            # announce new donations
+            # Find new donations
             new_items = []
             for x in donations:
-                did = x.get("donationID")
+                did = str(x.get("donationID"))
                 if did and did not in donation_state["seen_ids"]:
                     donation_state["seen_ids"].add(did)
                     new_items.append(x)
 
-            for x in reversed(new_items):  # oldest-first announce
+            for x in reversed(new_items):  # announce oldest-first
                 donor = x.get("displayName") or "Anonymous"
-                try:
-                    amount = float(x.get("amount", 0))
-                except Exception:
-                    amount = 0.0
+
+                # --- Optional amount handling ---
+                raw_amount = x.get("amount")
+                amount_text = ""
+                if raw_amount is not None:
+                    try:
+                        amount = float(raw_amount)
+                        amount_text = f" ${amount:.2f}"
+                    except Exception:
+                        amount_text = ""
+
                 message = (x.get("message") or "").strip()
-                chatmsg = f"🎉 {donor} donated ${amount:.2f}! 💖 They said: {message}"
+                if message:
+                    chatmsg = f"🎉 THANK YOU {donor}{amount_text}! 💖 “{message}”"
+                else:
+                    chatmsg = f"🎉 THANK YOU {donor}{amount_text}! 💖"
+
                 print(chatmsg)
                 try:
-                    # NOTE: assumes you have send_message(CHANNEL, text) in your bot already
                     send_message(CHANNEL, chatmsg)
                 except Exception as e:
                     print("Chat send failed:", e)
@@ -210,22 +217,22 @@ def poll_extra_life():
             donation_state["last_err"] = str(e)
             print("Extra Life poll error:", e)
 
-        time.sleep(15)  # poll cadence
+        time.sleep(15)
 
-# --- Tiny overlay server (served by this same process) ---
+# ------------------------------------------------------------------
+# OVERLAY SERVER
+# ------------------------------------------------------------------
 overlay = Flask("greggnog_overlay")
 
 @overlay.after_request
 def _nocache(resp):
-    # prevent any intermediate caching (helps OBS refresh)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
     return resp
 
 @overlay.route("/total")
 def total_json():
-    resp = make_response(jsonify({"total": donation_state["total"], "error": donation_state["last_err"]}))
-    return resp
+    return make_response(jsonify({"total": donation_state["total"], "error": donation_state["last_err"]}))
 
 @overlay.route("/overlay")
 def overlay_page():
@@ -253,9 +260,7 @@ def overlay_page():
             const j = await r.json();
             const val = Number(j.total || 0).toFixed(2);
             document.getElementById('counter').textContent = 'Raised: $' + val;
-          } catch (e) {
-            // ignore
-          }
+          } catch (e) { }
         }
         update(); setInterval(update, 10000);
       </script>
@@ -264,21 +269,14 @@ def overlay_page():
     """
     return render_template_string(html)
 
-@overlay.route("/healthz")
-def healthz():
-    return "ok", 200
-
 def run_overlay():
-    # Railway provides $PORT; default to 8080 locally
     port = int(os.getenv("PORT", "8080"))
     overlay.run(host="0.0.0.0", port=port, threaded=True, use_reloader=False)
 
-# Kick off background threads once your bot is initialized
-# (Call these near your bot startup—ONE time only)
 def start_extra_life_services():
     threading.Thread(target=poll_extra_life, daemon=True).start()
     threading.Thread(target=run_overlay, daemon=True).start()
-    print("✅ Extra Life overlay live → /overlay  | JSON → /total")
+    print("✅ Extra Life overlay live → /overlay | JSON → /total")
 # === END PATCH ===
 
 # ===== On-topic spontaneous chat context =====
@@ -1200,6 +1198,8 @@ def listen():
         except Exception as e:
             print("Error in main loop:", e)
             time.sleep(1)
+
+start_extra_life_services()
 
 # =====================================================
 # RUN
