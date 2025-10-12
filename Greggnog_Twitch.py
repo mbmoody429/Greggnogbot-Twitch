@@ -125,10 +125,157 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LOCAL_TZ = os.getenv("LOCAL_TZ", None)
 TZINFO = ZoneInfo(LOCAL_TZ) if (LOCAL_TZ and ZoneInfo) else None
 
+
 if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
     raise ValueError("Missing environment variable: TWITCH_OAUTH_TOKEN, TWITCH_CHANNEL, or OPENAI_API_KEY.")
 
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
+
+# === 🎁 EXTRA LIFE DONATION TRACKER (Railway-safe) ===
+import os, json, threading, time
+import requests
+from flask import Flask, jsonify, render_template_string, make_response
+
+# Read Participant ID from env (don’t hardcode for prod)
+EXTRA_LIFE_PARTICIPANT_ID = os.getenv("EXTRA_LIFE_PARTICIPANT_ID", "").strip()
+if not EXTRA_LIFE_PARTICIPANT_ID:
+    print("⚠️  EXTRA_LIFE_PARTICIPANT_ID is not set. Set it in Railway Variables.")
+EXTRA_LIFE_URL = f"https://www.extra-life.org/participants/552019/donate"
+EXTRA_LIFE_DONATIONS = f"https://www.extra-life.org/participants/552019/donate"
+
+# Shared in-memory state (safe on Railway dyno)
+donation_state = {
+    "total": 0.0,
+    "seen_ids": set(),   # donationIDs we’ve announced
+    "last_err": None,
+}
+
+# --- Poller: fetch total + new donations ---
+def poll_extra_life():
+    session = requests.Session()
+    headers = {
+        "Accept": "application/json",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "User-Agent": "Greggnog/1.0",
+    }
+    while True:
+        try:
+            if not EXTRA_LIFE_PARTICIPANT_ID:
+                time.sleep(15)
+                continue
+
+            # total
+            r = session.get(EXTRA_LIFE_URL, headers=headers, timeout=10)
+            r.raise_for_status()
+            pdata = r.json()
+            total = float(pdata.get("sumDonations", 0.0))
+
+            # donations
+            d = session.get(EXTRA_LIFE_DONATIONS, headers=headers, timeout=10)
+            d.raise_for_status()
+            donations = d.json() if isinstance(d.json(), list) else []
+
+            # announce new donations
+            new_items = []
+            for x in donations:
+                did = x.get("donationID")
+                if did and did not in donation_state["seen_ids"]:
+                    donation_state["seen_ids"].add(did)
+                    new_items.append(x)
+
+            for x in reversed(new_items):  # oldest-first announce
+                donor = x.get("displayName") or "Anonymous"
+                try:
+                    amount = float(x.get("amount", 0))
+                except Exception:
+                    amount = 0.0
+                message = (x.get("message") or "").strip()
+                chatmsg = f"🎉 {donor} donated ${amount:.2f}! 💖 They said: {message}"
+                print(chatmsg)
+                try:
+                    # NOTE: assumes you have send_message(CHANNEL, text) in your bot already
+                    send_message(CHANNEL, chatmsg)
+                except Exception as e:
+                    print("Chat send failed:", e)
+
+            donation_state["total"] = total
+            donation_state["last_err"] = None
+
+        except Exception as e:
+            donation_state["last_err"] = str(e)
+            print("Extra Life poll error:", e)
+
+        time.sleep(15)  # poll cadence
+
+# --- Tiny overlay server (served by this same process) ---
+overlay = Flask("greggnog_overlay")
+
+@overlay.after_request
+def _nocache(resp):
+    # prevent any intermediate caching (helps OBS refresh)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
+
+@overlay.route("/total")
+def total_json():
+    resp = make_response(jsonify({"total": donation_state["total"], "error": donation_state["last_err"]}))
+    return resp
+
+@overlay.route("/overlay")
+def overlay_page():
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8">
+      <meta http-equiv="Cache-Control" content="no-store" />
+      <style>
+        body { background: transparent; color: #fff;
+               font-family: 'Titan One', system-ui, sans-serif;
+               font-size: 40px; text-align: center;
+               text-shadow: 2px 2px 5px #000; margin:0; }
+        #counter { padding: 18px 28px; border-radius: 20px;
+                   background-color: rgba(255,187,194,0.5); display:inline-block; }
+        .wrap { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
+      </style>
+    </head>
+    <body>
+      <div class="wrap"><div id="counter">Raised: $0.00</div></div>
+      <script>
+        async function update() {
+          try {
+            const r = await fetch('./total', { cache: 'no-store' });
+            const j = await r.json();
+            const val = Number(j.total || 0).toFixed(2);
+            document.getElementById('counter').textContent = 'Raised: $' + val;
+          } catch (e) {
+            // ignore
+          }
+        }
+        update(); setInterval(update, 10000);
+      </script>
+    </body>
+    </html>
+    """
+    return render_template_string(html)
+
+@overlay.route("/healthz")
+def healthz():
+    return "ok", 200
+
+def run_overlay():
+    # Railway provides $PORT; default to 8080 locally
+    port = int(os.getenv("PORT", "8080"))
+    overlay.run(host="0.0.0.0", port=port, threaded=True, use_reloader=False)
+
+# Kick off background threads once your bot is initialized
+# (Call these near your bot startup—ONE time only)
+def start_extra_life_services():
+    threading.Thread(target=poll_extra_life, daemon=True).start()
+    threading.Thread(target=run_overlay, daemon=True).start()
+    print("✅ Extra Life overlay live → /overlay  | JSON → /total")
+# === END PATCH ===
 
 # ===== On-topic spontaneous chat context =====
 CHAT_CONTEXT = deque(maxlen=50)          # remember last 50 messages (non-commands)
@@ -310,7 +457,7 @@ def generate_startup_message():
         time_str = now.strftime("%I:%M %p").lstrip("0")
         slot_desc = get_current_slot()
         prompt = (
-            "Say hi to chat as {greggnog_persona} GREGGNOG_PERSONA."
+            "Say hi to chat as {greggnog_persona} GREGGNOG_PERSONA, informing them that you've been updated."
             f"DO NOT use quotation marks."
             "DO NOT use emojis."
         )
