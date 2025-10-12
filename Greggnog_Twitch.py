@@ -124,6 +124,7 @@ TOKEN = os.getenv("TWITCH_OAUTH_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LOCAL_TZ = os.getenv("LOCAL_TZ", None)
 TZINFO = ZoneInfo(LOCAL_TZ) if (LOCAL_TZ and ZoneInfo) else None
+maybe_spontaneous = False
 
 
 if not TOKEN or not CHANNEL or not OPENAI_API_KEY:
@@ -875,14 +876,6 @@ def get_recent_chat_context(max_lines=12):
     transcript = "\n".join(f"{u}: {m}" for (u, m) in tail)
     return transcript, len(recent)
 
-# =====================================================
-# STARTUP MESSAGE (AI dynamic)
-# =====================================================
-
-time.sleep(2)
-startup_line = generate_startup_message()
-if startup_line:
-    send_message(startup_line)
 
 # =====================================================
 # RECALL HELPERS (last 50 messages + bot last line)
