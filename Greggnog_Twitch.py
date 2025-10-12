@@ -403,13 +403,9 @@ irc.send(f"JOIN #{CHANNEL}\r\n".encode("utf-8"))
 
 print(f"{BOT_NICK} connected to #{CHANNEL}!")
 
-def send_message(msg):
-    try:
-        irc.send(f"PRIVMSG #{CHANNEL} :{msg}\r\n".encode("utf-8"))
-        # record bot line for recall
-        BOT_SAID.append((time.time(), msg))
-    except Exception as e:
-        print("Send error:", e)
+def send_message(channel, message):
+    msg = f"PRIVMSG #{channel} :{message}\r\n"
+    irc.send(msg.encode("utf-8"))
 
 # =====================================================
 # OPENAI RESPONSE HANDLERS
