@@ -247,7 +247,7 @@ def overlay_page():
                font-size: 40px; text-align: center;
                text-shadow: 2px 2px 5px #000; margin:0; }
         #counter { padding: 18px 28px; border-radius: 20px;
-                   background-color: rgba(255,187,194,0.5); display:inline-block; }
+                   background-color: #ADD8E6; display:inline-block; }
         .wrap { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
       </style>
     </head>
