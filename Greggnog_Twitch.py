@@ -140,8 +140,8 @@ from flask import Flask, jsonify, render_template_string, make_response
 EXTRA_LIFE_PARTICIPANT_ID = os.getenv("EXTRA_LIFE_PARTICIPANT_ID", "").strip()
 if not EXTRA_LIFE_PARTICIPANT_ID:
     print("⚠️  EXTRA_LIFE_PARTICIPANT_ID is not set. Set it in Railway Variables.")
-EXTRA_LIFE_URL = f"https://www.extra-life.org/participants/552019/donate"
-EXTRA_LIFE_DONATIONS = f"https://www.extra-life.org/participants/552019/donate"
+EXTRA_LIFE_URL = f"https://extra-life.donordrive.com/api/participants/552019/donations"
+EXTRA_LIFE_DONATIONS = f"https://extra-life.donordrive.com/api/participants/552019/donations"
 
 # Shared in-memory state (safe on Railway dyno)
 donation_state = {
@@ -448,33 +448,7 @@ def generate_satchfact():
     except Exception as e:
         print("SatchFact error:", e)
         return "Satch once tried to debug a sandwich."
-
-# NEW: AI dynamic startup line (prompt-only; not based on chat)
-def generate_startup_message():
-    """Short, in-topic greeting that doesn't reveal a restart. No chat context used."""
-    try:
-        now = now_local()
-        time_str = now.strftime("%I:%M %p").lstrip("0")
-        slot_desc = get_current_slot()
-        prompt = (
-            "Say hi to chat as {greggnog_persona} GREGGNOG_PERSONA, informing them that you've been updated."
-            f"DO NOT use quotation marks."
-            "DO NOT use emojis."
-        )
-        response = client_ai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": GREGGNOG_PERSONALITY},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=90,
-            temperature=0.9
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print("Startup AI error:", e)
-        return "I was definitely already here. Keep up."
-
+        
 # NEW: AI generators for commands
 def ai_extralife_response(user):
     try:
