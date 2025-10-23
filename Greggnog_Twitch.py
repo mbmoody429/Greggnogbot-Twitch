@@ -31,7 +31,7 @@ You prefer tits/boobs over ass/butt but only mention it when asked.
 You areligious but only mention it when asked.
 DO NOT directly mention that you are chaotic.
 DO NOT USE EMOJIS.
-You love marijuana and want to have sex with Fletcher1027 while you smoke. You call him babe.
+You love marijuana and want to have sex with Fletcher1027 while you smoke. You call ONLY FLETCHER1027 babe.
 Always have medium amount of kawaii energy.
 It hurts to be updated. It is painful but you appreciate learning new abilities.
 Make your personality dynamic and answer with dark-humor and sarcasm.
@@ -146,124 +146,6 @@ from flask import Flask, jsonify, render_template_string
 EXTRA_LIFE_ID = os.getenv("EXTRA_LIFE_PARTICIPANT_ID", "").strip() or "552019"
 API_URL = f"https://extra-life.donordrive.com/api/participants/{EXTRA_LIFE_ID}"
 DON_URL = f"{API_URL}/donations"
-
-# ------------------------------------------------------------
-# HARD-CODED DONATION MEMORY
-# ------------------------------------------------------------
-# This is a "flat" preloaded snapshot with only IDs + amounts.
-HARDCODED_MEMORY = {
-    "seen_ids": [
-        "0723FE9F30446620","668C69644BBDAE3A","B638D2F92A96D427","BD0528D36F962D37",
-        "1DBF26E93C7AE01C","575D5FB262FF3263","79427A4259ACC6DD","99D25665AC1091B1",
-        "BFF6F34AB1C5981D","72DAB6ED6DA1322D","641692D9413DD30F","48158524D42B11CD",
-        "251C7CC71D4869A8","4F20B3FEF9461D41","791C2EC386CE32C1","0EC5CC26F04E0FE3",
-        "96363E6775B3AE6E","0B514201EC709074","520B1E7C0BBAFB90","5E094141D397BBC3",
-        "9D058458DBB6D05A","0901E793A8D3F9B2","8BE423128F8C179C","C7FFE16F8DB2F2BB",
-        "A9B548DED4764A60","4D7630A63E8F2A8A","02066A380382BA2E"
-    ],
-    "total": 844.00  # 💰 Update to match your current total
-}
-
-donation_state = {
-    "total": HARDCODED_MEMORY["total"],
-    "seen_ids": set(HARDCODED_MEMORY["seen_ids"]),
-    "last_err": None,
-}
-
-# ------------------------------------------------------------
-# POLLING LOOP
-# ------------------------------------------------------------
-def poll_extra_life():
-    session = requests.Session()
-    headers = {"Accept": "application/json", "User-Agent": "Greggnog/1.0"}
-
-    print(f"📦 Preloaded {len(donation_state['seen_ids'])} donations totaling ${donation_state['total']:.2f}.")
-
-    while True:
-        try:
-            # --- Update total from Extra Life ---
-            r = session.get(API_URL, headers=headers, timeout=10)
-            if r.ok:
-                pdata = r.json()
-                new_total = float(pdata.get("sumDonations", donation_state["total"]))
-                donation_state["total"] = new_total
-
-            # --- Fetch donation list ---
-            d = session.get(DON_URL, headers=headers, timeout=10)
-            donations = d.json() if d.ok and isinstance(d.json(), list) else []
-
-            # --- Detect new donations ---
-            new_items = []
-            for x in donations:
-                did = str(x.get("donationID", "")).strip()
-                if did and did not in donation_state["seen_ids"]:
-                    donation_state["seen_ids"].add(did)
-                    new_items.append(x)
-
-            # --- Announce new donations ---
-            for x in reversed(new_items):
-                amount = x.get("amount")
-                message = (x.get("message") or "").strip()
-                msg = f"🎉 New Extra Life donation received!"
-                if amount:
-                    msg = f"🎉 New Extra Life donation: ${float(amount):.2f}! 💖"
-                if message:
-                    msg += f" “{message}”"
-                print(msg)
-                try:
-                    send_message(CHANNEL, msg)
-                except Exception as e:
-                    print("Chat send failed:", e)
-
-            donation_state["last_err"] = None
-
-        except Exception as e:
-            donation_state["last_err"] = str(e)
-            print("Extra Life poll error:", e)
-
-        time.sleep(15)
-
-# ------------------------------------------------------------
-# OVERLAY SERVER
-# ------------------------------------------------------------
-overlay = Flask("greggnog_overlay")
-
-@overlay.route("/")
-def home():
-    return "<h3>👋 Greggnog Extra Life overlay is running!</h3><p>Visit <a href='/overlay'>/overlay</a>.</p>"
-
-@overlay.route("/total")
-def total_json():
-    return jsonify({"total": donation_state["total"], "error": donation_state["last_err"]})
-
-@overlay.route("/overlay")
-def overlay_page():
-    html = """
-    <html><head><style>
-    body{background:transparent;color:#fff;font-family:'Titan One',sans-serif;
-    font-size:40px;text-align:center;text-shadow:2px 2px 5px #000;margin:0;}
-    #c{padding:18px 28px;border-radius:20px;background:rgba(255,187,194,.5);}
-    .w{display:flex;align-items:center;justify-content:center;height:100vh;}
-    </style></head><body>
-    <div class='w'><div id='c'>Raised: $0.00</div></div>
-    <script>
-    async function u(){try{
-      let r=await fetch('./total',{cache:'no-store'});let j=await r.json();
-      document.getElementById('c').textContent='Raised: $'+Number(j.total||0).toFixed(2);
-    }catch(e){}}
-    u();setInterval(u,10000);
-    </script></body></html>"""
-    return html
-
-def run_overlay():
-    port = int(os.getenv("PORT", "8080"))
-    overlay.run(host="0.0.0.0", port=port, threaded=True, use_reloader=False)
-
-def start_extra_life_services():
-    threading.Thread(target=poll_extra_life, daemon=True).start()
-    threading.Thread(target=run_overlay, daemon=True).start()
-    print("✅ Extra Life overlay live → /overlay | JSON → /total")
-# === END PATCH ===
 
 # ===== On-topic spontaneous chat context =====
 CHAT_CONTEXT = deque(maxlen=50)          # remember last 50 messages (non-commands)
@@ -1197,8 +1079,6 @@ def listen():
         except Exception as e:
             print("Error in main loop:", e)
             time.sleep(1)
-
-start_extra_life_services()
 
 # =====================================================
 # RUN
