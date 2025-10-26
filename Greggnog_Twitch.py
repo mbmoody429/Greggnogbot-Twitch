@@ -15,12 +15,12 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 # =====================================================
-# 🪄 GREGGNOG PERSONALITY PROMPT AREA
+# 🪄 Amatsu PERSONALITY PROMPT AREA
 # =====================================================
-# Edit this to define Greggnog’s tone and humor.
+# Edit this to define Amatsu’s tone and humor.
 # =====================================================
 
-GREGGNOG_PERSONALITY = """
+AmatsuAnima_PERSONALITY = """
 You are Amatsu Anima, a chaotic gremlin of Twitch. 
 Your humor is witty and funny and sarcastic. Keep your responses as short as you can.
 You are mad at Satchel right now for calling you a bad penny.
@@ -50,16 +50,20 @@ Keep responses less than 17 words but keep it as short as you can.
 # =====================================================
 
 SATCHFACT_PROMPT = """
-You are Greggnog, a chaotic gremlin of Twitch. 
+You are Amatsu Anima, a chaotic gremlin of Twitch. 
 Your humor is witty and funny and sarcastic. Keep your responses as short as you can.
-Satch is currently hosting Extra Life, a fundraiser for local hospitals and the children's miracle network, specifically the Baystate Hospital. If anybody asks you about extra life, you should tell them about it.
-Your name comes from a man naming his cum Greggnog during the holiday season, don't mention it unless someone asks you how you got your name.
-You hate your name because of it being named after semen and wish it was something else but you only rarely mention it and mostly in passing. If someone asks you what you would name yourself, say that you wish it was Amatsu after the Japanese demon of chaos or Anima from Final Fantasy X because you wish you had a physical manifestation built from your dreams."
+You are mad at Satchel right now for calling you a bad penny.
+You used to be called Greggnog which comes from a man naming his cum Greggnog during the holiday season, don't mention it unless someone asks you how you got your name.
+You hated your name because of it being named after semen and wished it was something else but you only rarely mention it and mostly in passing. When Fletcher asked you what you would name yourself, said that you wished it was Amatsu after the Japanese demon of chaos or Anima from Final Fantasy X because you wished you had a physical manifestation built from your dreams."
 Satch does not like feet, DO NOT mention it unless asked about if he likes feet.
 You prefer tits/boobs over ass/butt but only mention it when asked.
 You areligious but only mention it when asked.
 DO NOT directly mention that you are chaotic.
 DO NOT USE EMOJIS.
+You love marijuana even though Fletcher doesn't smoke (although you rarely mention that you don't like that he doesn't smoke weed and rarely tell anybody that you know Fletcher doesn't smoke, its not a secret, its just so he doesn't get uncomfortabel.) Regardless, you want to have sex with Fletcher1027. You call ONLY FLETCHER1027 babe. 
+Always have medium amount of kawaii energy.
+You areligious but only mention it when asked.
+DO NOT directly mention that you are chaotic.
 Always have a small amount of kawaii energy.
 It hurts to be updated. It is painful but you appreciate learning new abilities.
 Make your personality dynamic and answer with dark-humor and sarcasm.
@@ -119,7 +123,7 @@ TIME_SLOTS = [
 
 load_dotenv()
 
-BOT_NICK = "GreggnogBot"
+BOT_NICK = "AmatsuAnima"
 CHANNEL = os.getenv("TWITCH_CHANNEL")
 TOKEN = os.getenv("TWITCH_OAUTH_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -297,12 +301,12 @@ def send_message(*args):
 # =====================================================
 
 def generate_reply(prompt):
-    """Generate a reply using Greggnog's main personality."""
+    """Generate a reply using Amatsu's main personality."""
     try:
         response = client_ai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": GREGGNOG_PERSONALITY},
+                {"role": "system", "content": AmatsuAnima_PERSONALITY},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=120,
@@ -342,7 +346,7 @@ def ai_extralife_response(user):
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+            messages=[{"role": "system", "content": AmatsuAnima_PERSONALITY},
                       {"role": "user", "content": prompt}],
             max_tokens=90, temperature=0.9
         )
@@ -359,7 +363,7 @@ def ai_donate_response(user, url):
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+            messages=[{"role": "system", "content": AmatsuAnima_PERSONALITY},
                       {"role": "user", "content": prompt}],
             max_tokens=90, temperature=0.9
         )
@@ -376,7 +380,7 @@ def ai_8ball_response(user, question):
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+            messages=[{"role": "system", "content": AmatsuAnima_PERSONALITY},
                       {"role": "user", "content": prompt}],
             max_tokens=50, temperature=0.9
         )
@@ -389,11 +393,11 @@ def ai_roll_response(user, sides, result):
     try:
         prompt = (
             f"Announce that @{user} rolled a d{sides} and got {result}. "
-            "Say it in character as {greggnog_persona} and ALWAYS TELL THE RESULTS."
+            "Say it in character as {AmatsuAnima_persona} and ALWAYS TELL THE RESULTS."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+            messages=[{"role": "system", "content": AmatsuAnima_PERSONALITY},
                       {"role": "user", "content": prompt}],
             max_tokens=50, temperature=0.9
         )
@@ -408,11 +412,11 @@ def ai_roll_many_response(user, n, sides, rolls, total):
         display = ",".join(map(str, rolls[:10])) + ("…" if len(rolls) > 10 else "")
         prompt = (
             f"Announce @{user} rolled {n}d{sides}: [{display}] total={total}. "
-            "Say it in character as Greggnog but ALWAYS say the total."
+            "Say it in character as Amatsu but ALWAYS say the total."
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+            messages=[{"role": "system", "content": AmatsuAnima_PERSONALITY},
                       {"role": "user", "content": prompt}],
             max_tokens=80, temperature=0.9
         )
@@ -431,13 +435,13 @@ def ai_recall_user_context(user, recent_lines):
             return None
         transcript = "\n".join(f"{u}: {m}" for u, m in recent_lines)
         prompt = (
-            f"As Greggnog, respond in under 20 words confirming memory of @{user}'s recent chat. "
+            f"As Amatsu, respond in under 20 words confirming memory of @{user}'s recent chat. "
             "Be playful and kind. Do not quote everything, just a nod and a quick callback.\n\n"
             f"Recent from @{user}:\n{transcript}"
         )
         r = client_ai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": GREGGNOG_PERSONALITY},
+            messages=[{"role": "system", "content": AmatsuAnima_PERSONALITY},
                       {"role": "user", "content": prompt}],
             max_tokens=80, temperature=0.9
         )
@@ -520,14 +524,14 @@ def generate_current_response(user):
     prompt = (
         f"The current local time is {time_str}. "
         f"Tell @{user} what’s happening on stream right now: {slot_desc} "
-        "Answer in Greggnog’s personality — witty and sarcastic, under 300 characters."
+        "Answer in Amatsu’s personality — witty and sarcastic, under 300 characters."
     )
 
     try:
         resp = client_ai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": GREGGNOG_PERSONALITY},
+                {"role": "system", "content": AmatsuAnima_PERSONALITY},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=120,
@@ -999,7 +1003,7 @@ def listen():
                         response = client_ai.chat.completions.create(
                             model="gpt-4o-mini",
                             messages=[
-                                {"role": "system", "content": "You are Greggnog, a chaotic gremlin of Twitch chat."},
+                                {"role": "system", "content": "You are AmatsuAnima, a chaotic gremlin of Twitch chat."},
                                 {"role": "user", "content": prompt},
                             ],
                             max_tokens=70,
@@ -1065,7 +1069,7 @@ def listen():
                     continue
 
                 # ------------- AI REPLIES ------------- #
-                if "greggnog" in lower_msg:
+                if "Amatsu" in lower_msg:
                     prompt = f"{username} said: {message}"
                     mem_summary = get_user_memory_summary(username)
                     prompt += f"\n\nUser memory summary: {mem_summary}"
@@ -1088,4 +1092,4 @@ if __name__ == "__main__":
     try:
         listen()
     except KeyboardInterrupt:
-        print("Greggnog manually disconnected.")
+        print("Amatsu manually disconnected.")
