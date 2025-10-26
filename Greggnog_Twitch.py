@@ -1088,31 +1088,7 @@ def listen():
         except Exception as e:
             print("Error in main loop:", e)
             time.sleep(1)
-# === Amatsu's dynamic startup announcement ===
-try:
-    intro_prompt = (
-        "You have just been updated can now be called Anima as a nickname. "
-        "Announce that chat can now call you Anima if they want. "
-        "You are very excited about it and in a playful, sarcastic, gremlin tone. "
-        "Keep it under 25 words."
-    )
-    intro_reply = client_ai.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": AmatsuAnima_PERSONALITY},
-            {"role": "user", "content": intro_prompt},
-        ],
-        max_tokens=60,
-        temperature=0.9,
-    ).choices[0].message.content.strip()
 
-    send_message(intro_reply)
-except Exception as e:
-    print("Startup intro failed:", e)
-    send_message(
-        "✨ The bot formerly known as Greggnog has ascended — I can now be called Anima! "
-        "I’m very excited to be here, chaos and all!"
-    )
 
 # =====================================================
 # RUN
