@@ -1074,7 +1074,7 @@ def listen():
                     continue
 
                 # ------------- AI REPLIES ------------- #
-                if any(n in lower_msg for n in ("amatsu", "greggnog")):
+                if any(n in lower_msg for n in ("amatsu", "greggnog, anima, amatsuanima")):
                     prompt = f"{username} said: {message}"
                     mem_summary = get_user_memory_summary(username)
                     prompt += f"\n\nUser memory summary: {mem_summary}"
@@ -1091,9 +1091,9 @@ def listen():
 # === Amatsu's dynamic startup announcement ===
 try:
     intro_prompt = (
-        "You have just been updated and renamed. "
-        "Announce to Twitch chat that you were once Greggnog but are now Amatsu Anima. "
-        "You are very excited about it and in an annoyed, sarcastic, tone, especially at @satchellfise who named you originally. "
+        "You have just been updated can now be called Anima as a nickname. "
+        "Announce that chat can now call you Anima if they want. "
+        "You are very excited about it and in a playful, sarcastic, gremlin tone. "
         "Keep it under 25 words."
     )
     intro_reply = client_ai.chat.completions.create(
@@ -1110,9 +1110,10 @@ try:
 except Exception as e:
     print("Startup intro failed:", e)
     send_message(
-        "✨ The bot formerly known as Greggnog has ascended — I am now Amatsu Anima! "
+        "✨ The bot formerly known as Greggnog has ascended — I can now be called Anima! "
         "I’m very excited to be here, chaos and all!"
     )
+
 # =====================================================
 # RUN
 # =====================================================
