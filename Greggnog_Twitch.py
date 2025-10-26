@@ -1037,7 +1037,6 @@ def listen():
                         send_message(reply)
                         remember_event(username, "command", name="roll", roll_desc=f"d20={result}")
                     continue
-
                 # existing !satchfact command (kept)
                 if lower_msg.startswith("!satchfact"):
                     fact = generate_satchfact()
@@ -1053,7 +1052,13 @@ def listen():
                     "what was that", "say that again", "repeat that"
                 ]
                 if any(p in lower_msg for p in recall_triggers):
-                    if ("what did you" in lower_msg) or ("what'd you" in lower_msg) or ("say that again" in lower_msg) or ("repeat that" in lower_msg) or ("what was that" in lower_msg):
+                    if (
+                        "what did you" in lower_msg
+                        or "what'd you" in lower_msg
+                        or "say that again" in lower_msg
+                        or "repeat that" in lower_msg
+                        or "what was that" in lower_msg
+                    ):
                         last = get_last_bot_line()
                         if last:
                             send_message(f"@{username} I just said: {last}")
@@ -1069,7 +1074,7 @@ def listen():
                     continue
 
                 # ------------- AI REPLIES ------------- #
-                if "Amatsu" in lower_msg:
+                if any(n in lower_msg for n in ("amatsu", "greggnog")):
                     prompt = f"{username} said: {message}"
                     mem_summary = get_user_memory_summary(username)
                     prompt += f"\n\nUser memory summary: {mem_summary}"
