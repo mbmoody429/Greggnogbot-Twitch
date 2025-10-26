@@ -162,6 +162,32 @@ BOT_SAID = deque(maxlen=50)
 # ===== Per-user lightweight memory =====
 USER_MEMORY = {}  # username(lower) -> dict of small facts
 
+# === Amatsu's dynamic startup announcement ===
+try:
+    intro_prompt = (
+        "You have just been updated and renamed. "
+        "Announce to Twitch chat that you were once Greggnog but are now Amatsu Anima. "
+        "You are very excited about it and in an annoyed, sarcastic, tone, especially at @satchellfise who named you originally. "
+        "Keep it under 25 words."
+    )
+    intro_reply = client_ai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": AmatsuAnima_PERSONALITY},
+            {"role": "user", "content": intro_prompt},
+        ],
+        max_tokens=60,
+        temperature=0.9,
+    ).choices[0].message.content.strip()
+
+    send_message(intro_reply)
+except Exception as e:
+    print("Startup intro failed:", e)
+    send_message(
+        "✨ The bot formerly known as Greggnog has ascended — I am now Amatsu Anima! "
+        "I’m very excited to be here, chaos and all!"
+    )
+
 def _get_umem(user):
     k = (user or "").lower()
     if k not in USER_MEMORY:
