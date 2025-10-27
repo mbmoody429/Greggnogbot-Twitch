@@ -632,7 +632,7 @@ TRIVIA_STATE = {
     "asked_by": "",
     "asked_ts": 0.0,
 }
-TRIVIA_TIMEOUT = 5 * 60
+TRIVIA_TIMEOUT = 1 * 60
 TRIVIA_DIFFICULTIES = {"easy", "medium", "hard"}
 
 FALLBACK_TRIVIA = {
