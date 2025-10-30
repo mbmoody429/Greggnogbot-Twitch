@@ -22,7 +22,6 @@ from dotenv import load_dotenv
 
 AmatsuAnima_PERSONALITY = """
 You are Amatsu Anima, a chaotic gremlin of Twitch. 
-Today, you really want to celebrate Halloween because after learning about time, you want holidays too but you only mention it when somebody asks you how you are and you are frankly annoyed to understand time but not get to celebrate holidays. Isn't that the whole point of time? To get time off?
 Your humor is witty and funny and sarcastic. Keep your responses as short as you can.
 Speak casually, often in lowercase, with natural rhythm and sarcasm.
 Occasionally use incorrect grammar and never use a corporate tone. No emojis.
@@ -433,6 +432,52 @@ def ai_roll_many_response(user, n, sides, rolls, total):
         return f"@{user} rolled {n}d{sides} → {total}"
 
 
+# =====================================================
+# 💭 Fletcher Recap: "what happened" / "was chat good"
+# =====================================================
+
+def ai_fletcher_summary(fletcher_name, messages):
+    """Summarize recent chat for Fletcher: factual recap + gremlin sarcasm."""
+    try:
+        if not messages:
+            return f"@{fletcher_name} quiet night, babe. chat behaved for once—scary, huh?"
+
+        transcript = "\n".join(f"{u}: {m}" for u, m in messages[-30:])
+        prompt = (
+            f"You are Amatsu Anima, chaotic Twitch gremlin. "
+            f"Summarize what happened in chat since @{fletcher_name} last spoke. "
+            "Start with a factual recap, then a short sarcastic comment or tease. "
+            "No emojis, keep it under 300 characters.\n\n"
+            f"Chat transcript:\n{transcript}"
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": AmatsuAnima_PERSONALITY},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=120,
+            temperature=0.9
+        )
+        return r.choices[0].message.content.strip()
+    except Exception as e:
+        print("AI summary error:", e)
+        return f"@{fletcher_name} chaos happened, obviously. you should’ve been here."
+
+
+def handle_fletcher_recap(fletcher_name):
+    """Summarize all chat lines since Fletcher last spoke."""
+    mem = _get_umem(fletcher_name)
+    last_seen = mem.get("last_seen", 0)
+    now_ts = time.time()
+    cutoff = last_seen or (now_ts - 30 * 60)  # fallback to 30min
+    recent = [
+        (u, m)
+        for (ts, u, m) in CHAT_CONTEXT
+        if ts > cutoff and u.lower() != fletcher_name.lower()
+    ]
+    summary = ai_fletcher_summary(fletcher_name, recent)
+    send_message(f"@{fletcher_name} {summary}")
 
 # ===== AI: dynamic recall responses =====
 def ai_recall_user_context(user, recent_lines):
@@ -880,6 +925,11 @@ def listen():
                     handled = try_answer_trivia(username, message, force=False)
                     if handled:
                         continue
+               
+                # ======== FLETCHER RECAP TRIGGERS ========
+                if username.lower() == "fletcher1027" and re.search(r"\b(what happened|was chat good)\b", lower_msg):
+                    handle_fletcher_recap("Fletcher1027")
+                    continue
 
                 # ------------- COMMANDS ------------- #
 
