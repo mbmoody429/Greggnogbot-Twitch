@@ -431,6 +431,118 @@ def ai_roll_many_response(user, n, sides, rolls, total):
         print("!roll many AI error:", e)
         return f"@{user} rolled {n}d{sides} → {total}"
 
+# =====================================================
+# 💦 GOON COMMAND — 24h MEMORY + Fletcher 1000%
+# =====================================================
+
+def ai_goon_response(user):
+    """Analyze user's chat history and assign a 'goon percent' based on horniness level.
+    Each user keeps their score for 24 hours before being re-evaluated.
+    Fletcher1027 is always 1000% goon.
+    """
+    try:
+        uname = user.lower()
+        now_ts = time.time()
+
+        # --- Fletcher special case ---
+        if uname == "fletcher1027":
+            percent = 1000
+            remember_event(user, "command", name="goon", percent=percent)
+            return f"@{user} {percent}% goon. hopeless case, babe."
+
+        # --- Check if user already has a recent score ---
+        mem = _get_umem(user)
+        prev_percent = mem.get("goon_percent")
+        prev_seen = mem.get("goon_timestamp", 0)
+        if prev_percent is not None and (now_ts - prev_seen) < 24 * 3600:
+            # Within 24h window — reuse old score
+            return f"@{user} still {prev_percent}% goon from earlier. no redemption arc yet."
+
+        # --- Otherwise, reassess ---
+        lines = get_recent_lines_by_user(user, n=20)
+        if not lines:
+            percent = random.randint(5, 99)
+            summary = f"{percent}% goon. no history, pure vibes."
+        else:
+            transcript = "\n".join(f"{u}: {m}" for u, m in lines)
+            prompt = (
+                f"You are Amatsu Anima, chaotic Twitch gremlin. "
+                f"Read @{user}'s recent Twitch messages and decide how horny they are "
+                f"on a 0–100 scale (0=saintly, 100=terminal goon). "
+                f"Return only the percentage and a short sarcastic remark. "
+                f"No emojis, under 200 characters.\n\n"
+                f"Chat transcript:\n{transcript}"
+            )
+            r = client_ai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": AmatsuAnima_PERSONALITY},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=80,
+                temperature=0.9,
+            )
+            reply = r.choices[0].message.content.strip()
+            m = re.search(r"(\d{1,3})\s*%", reply)
+            if m:
+                percent = max(0, min(int(m.group(1)), 100))
+            else:
+                percent = random.randint(5, 99)
+            summary = f"{percent}% goon — {reply}"
+
+        # Save to user memory with timestamp
+        mem["goon_percent"] = percent
+        mem["goon_timestamp"] = now_ts
+        remember_event(user, "command", name="goon", percent=percent)
+
+        return f"@{user} {summary}"
+
+    except Exception as e:
+        print("!goon AI error:", e)
+        percent = random.randint(10, 99)
+        mem = _get_umem(user)
+        mem["goon_percent"] = percent
+        mem["goon_timestamp"] = time.time()
+        remember_event(user, "command", name="goon", percent=percent)
+        return f"@{user} {percent}% goon. containment failed."
+
+# =====================================================
+# 🐶 PRETZEL COMMAND — DOG HYPE & VIRTUAL PETS
+# =====================================================
+
+def ai_pretzel_response(user):
+    """Amatsu reacts to Pretzel (Satchel's dog) appearing on stream with pure joy and chaos."""
+    try:
+        prompt = (
+            f"You are Amatsu Anima, chaotic Twitch gremlin. "
+            f"Satchel's dog, Pretzel, just appeared on stream. "
+            f"React with over-the-top excitement about dogs, especially Pretzel. "
+            f"Virtually pet him, praise him, and maybe bark or scream in text. "
+            f"Keep it under 200 characters, no emojis, but high chaotic energy. "
+            f"Use your trademark sarcasm and affection. Mention Pretzel by name."
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": AmatsuAnima_PERSONALITY},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=80,
+            temperature=1.0,
+        )
+        reply = r.choices[0].message.content.strip()
+        return reply
+    except Exception as e:
+        print("!pretzel AI error:", e)
+        # fallback lines if OpenAI hiccups
+        return random.choice([
+            "PUPPY ALERT! PRETZEL!!! come here you perfect loaf!!!",
+            "pretzel!!!! precious boy!!! *virtual pet barrage*",
+            "dog detected. deploying chaos-level affection.",
+            "pretzel is on stream. everyone shut up. priorities.",
+            "i would die for pretzel. immediately.",
+            "pretzel supremacy. all hail the fluff.",
+        ])
 
 # =====================================================
 # 💭 Fletcher Recap: "what happened" / "was chat good"
@@ -925,7 +1037,14 @@ def listen():
                     handled = try_answer_trivia(username, message, force=False)
                     if handled:
                         continue
-               
+                
+                # ======== !pretzel COMMAND ========
+                if lower_msg.startswith("!pretzel"):
+                    reply = ai_pretzel_response(username)
+                    send_message(f"@{username} {reply}")
+                    remember_event(username, "command", name="pretzel")
+                    continue
+
                 # ======== FLETCHER RECAP TRIGGERS ========
                 if username.lower() == "fletcher1027" and re.search(r"\b(what happened|was chat good)\b", lower_msg):
                     handle_fletcher_recap("Fletcher1027")
@@ -1051,24 +1170,11 @@ def listen():
                     remember_event(username, "command", name="8ball")
                     continue
 
-                # ======== !goon COMMAND ========
+                 # ======== !goon COMMAND ========
                 if lower_msg.startswith("!goon"):
-                    send_message(ai_goon_response(username))
+                    reply = ai_goon_response(username)
+                    send_message(reply)
                     continue
-
-                    try:
-                        response = client_ai.chat.completions.create(
-                            model="gpt-4o-mini",
-                            messages=[
-                                {"role": "system", "content": "You are AmatsuAnima, a chaotic gremlin of Twitch chat."},
-                                {"role": "user", "content": prompt},
-                            ],
-                            max_tokens=70,
-                            temperature=1.0,
-                        )
-                        line = response.choices[0].message.content.strip()
-                    except Exception as e:
-                        print
 
                 # AI: Roll NdM dice (defaults to d20)
                 if lower_msg.startswith("!roll"):
