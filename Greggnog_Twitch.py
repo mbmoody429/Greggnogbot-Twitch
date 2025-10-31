@@ -524,7 +524,43 @@ def ai_goon_response(user):
         mem["goon_timestamp"] = time.time()
         remember_event(user, "command", name="goon", percent=percent)
         return f"@{user} {percent}% goon. containment failed."
+# =====================================================
+# 🐱 ELLIE COMMAND — CAT EXCITEMENT & VIRTUAL PETS
+# =====================================================
 
+def ai_ellie_response(user):
+    """Amatsu reacts to Satchel's cat Ellie appearing on stream."""
+    try:
+        prompt = (
+            f"You are Amatsu Anima, chaotic Twitch gremlin. "
+            f"Satchel's cat, Ellie, just appeared on stream. "
+            f"React with over-the-top affection and excitement for cats, especially Ellie. "
+            f"Virtually pet her, compliment her fluff, paws, and attitude. "
+            f"Stay chaotic but tender — like you genuinely love cats. "
+            f"No emojis. Keep it under 200 characters. Mention Ellie by name."
+        )
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": AmatsuAnima_PERSONALITY},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=80,
+            temperature=1.0,
+        )
+        reply = r.choices[0].message.content.strip()
+        return reply
+    except Exception as e:
+        print("!ellie AI error:", e)
+        # fallback lines if AI fails
+        return random.choice([
+            "ELLIE!! softest gremlin rival!! *virtual pets everywhere*",
+            "ellie just showed up?? i’m unwell. too much cuteness.",
+            "cat on stream!! all priorities canceled!!",
+            "ellie supremacy. i’d die for that fluff.",
+            "look at that face. criminal levels of adorable.",
+            "paws. beans. fur. perfection. ellie wins.",
+        ])
 # =====================================================
 # 🐶 PRETZEL COMMAND — DOG HYPE & VIRTUAL PETS
 # =====================================================
@@ -1057,6 +1093,13 @@ def listen():
                     if handled:
                         continue
                 
+                # ======== !ellie COMMAND ========
+                if lower_msg.startswith("!ellie"):
+                    reply = ai_ellie_response(username)
+                    send_message(f"@{username} {reply}")
+                    remember_event(username, "command", name="ellie")
+                    continue
+
                 # ======== !pretzel COMMAND ========
                 if lower_msg.startswith("!pretzel"):
                     reply = ai_pretzel_response(username)
