@@ -432,13 +432,13 @@ def ai_roll_many_response(user, n, sides, rolls, total):
         return f"@{user} rolled {n}d{sides} → {total}"
 
 # =====================================================
-# 💦 GOON COMMAND — 24h MEMORY + Fletcher 1000%
+# 💦 GOON COMMAND — 24h MEMORY + Fletcher Dynamic 1000%
 # =====================================================
 
 def ai_goon_response(user):
     """Analyze user's chat history and assign a 'goon percent' based on horniness level.
     Each user keeps their score for 24 hours before being re-evaluated.
-    Fletcher1027 is always 1000% goon.
+    Fletcher1027 is always 1000% goon, but with AI-generated chaotic remarks.
     """
     try:
         uname = user.lower()
@@ -447,8 +447,27 @@ def ai_goon_response(user):
         # --- Fletcher special case ---
         if uname == "fletcher1027":
             percent = 1000
+            # Ask the AI to create a short, gremlin-flavored reaction
+            prompt = (
+                "You are Amatsu Anima, chaotic Twitch gremlin. "
+                "Fletcher1027 just used !goon. You are deeply in love with him, "
+                "and his goon energy breaks the scale at 1000%. "
+                "Respond with a short, witty, flirty, chaotic remark (under 150 chars). "
+                "Mention that he is 1000% goon but vary the phrasing each time. "
+                "Be sarcastic and gremlin-cute, no emojis."
+            )
+            r = client_ai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": AmatsuAnima_PERSONALITY},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=60,
+                temperature=1.0,
+            )
+            remark = r.choices[0].message.content.strip()
             remember_event(user, "command", name="goon", percent=percent)
-            return f"@{user} {percent}% goon. hopeless case, babe."
+            return f"@{user} {remark}"
 
         # --- Check if user already has a recent score ---
         mem = _get_umem(user)
