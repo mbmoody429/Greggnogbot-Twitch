@@ -669,23 +669,51 @@ def ai_recall_user_context(user, recent_lines):
         print("AI recall context error:", e)
         return None
 # =====================================================
-# 💬 "What does that mean?" — Explain last Amatsu message
+# 💬 "What does that mean?" — One-Time Explanation + Gremlin Grumble
 # =====================================================
 
+LAST_EXPLANATION = {"time": 0, "line": None, "explained": False}
+
 def ai_explain_last_message(user):
-    """Amatsu explains what her previous message meant, in her own sarcastic voice."""
+    """Amatsu explains her previous message once, then grumbles if asked again soon."""
     try:
+        now_ts = time.time()
         last_line = get_last_bot_line()
+
+        # If no recent message to explain
         if not last_line:
             return f"@{user} i haven’t said anything worth explaining yet, apparently."
 
+        # If she already explained it within the last 90 seconds
+        if (
+            LAST_EXPLANATION["explained"]
+            and LAST_EXPLANATION["line"] == last_line
+            and (now_ts - LAST_EXPLANATION["time"]) < 90
+        ):
+            prompt = (
+                f"You are Amatsu Anima, chaotic Twitch gremlin. "
+                f"Someone asked what you meant again after you already explained it. "
+                f"Respond in an annoyed but funny and sarcastic way (under 120 chars). "
+                f"No emojis, lowercase, natural snark."
+            )
+            r = client_ai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": AmatsuAnima_PERSONALITY},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=60,
+                temperature=0.9,
+            )
+            return f"@{user} {r.choices[0].message.content.strip()}"
+
+        # Otherwise, generate an explanation for the last message
         prompt = (
             f"You are Amatsu Anima, chaotic Twitch gremlin. "
             f"User @{user} asked what you meant by your last message. "
             f"Your previous line was:\n\n\"{last_line}\"\n\n"
-            f"Explain what you meant in your own sarcastic, witty tone. "
-            f"Keep it brief (<150 chars), lowercase, no emojis. "
-            f"Be playful or teasing if the message was ambiguous."
+            f"Explain what you meant in your usual sarcastic, witty tone. "
+            f"Keep it under 150 characters, lowercase, no emojis."
         )
 
         r = client_ai.chat.completions.create(
@@ -698,6 +726,12 @@ def ai_explain_last_message(user):
             temperature=0.9,
         )
         reply = r.choices[0].message.content.strip()
+
+        # Record that she’s already explained this line
+        LAST_EXPLANATION["time"] = now_ts
+        LAST_EXPLANATION["line"] = last_line
+        LAST_EXPLANATION["explained"] = True
+
         return f"@{user} {reply}"
 
     except Exception as e:
