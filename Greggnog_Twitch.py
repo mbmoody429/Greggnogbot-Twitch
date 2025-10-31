@@ -668,6 +668,41 @@ def ai_recall_user_context(user, recent_lines):
     except Exception as e:
         print("AI recall context error:", e)
         return None
+# =====================================================
+# 💬 "What does that mean?" — Explain last Amatsu message
+# =====================================================
+
+def ai_explain_last_message(user):
+    """Amatsu explains what her previous message meant, in her own sarcastic voice."""
+    try:
+        last_line = get_last_bot_line()
+        if not last_line:
+            return f"@{user} i haven’t said anything worth explaining yet, apparently."
+
+        prompt = (
+            f"You are Amatsu Anima, chaotic Twitch gremlin. "
+            f"User @{user} asked what you meant by your last message. "
+            f"Your previous line was:\n\n\"{last_line}\"\n\n"
+            f"Explain what you meant in your own sarcastic, witty tone. "
+            f"Keep it brief (<150 chars), lowercase, no emojis. "
+            f"Be playful or teasing if the message was ambiguous."
+        )
+
+        r = client_ai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": AmatsuAnima_PERSONALITY},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=80,
+            temperature=0.9,
+        )
+        reply = r.choices[0].message.content.strip()
+        return f"@{user} {reply}"
+
+    except Exception as e:
+        print("AI explain error:", e)
+        return f"@{user} i meant exactly what i said. probably."
 
 # =====================================================
 # TIMER + TIME-OF-DAY HELPERS
@@ -1296,6 +1331,12 @@ def listen():
                             send_message(f"@{username} {reply}")
                         else:
                             send_message(f"@{username} I remember you. Vividly. 🫣")
+                    continue
+             
+                # ======== "what does that mean" / "what did you mean" ========
+                if re.search(r"\b(what does that mean|what did you mean|what'd you mean)\b", lower_msg):
+                    reply = ai_explain_last_message(username)
+                    send_message(reply)
                     continue
 
                 # ------------- AI REPLIES ------------- #
